@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agience-bridge"
 version = "0.1.0"
-description = "Agience Bridge — the developer SDK (Apache-2.0): build a Host (compute serving operators) or an MCP server on Agience, over the wire. No platform IP. Consolidates the former agience-host and the original agience-bridge SDKs; the trust floor moved to agience-core."
+description = "Agience Bridge — the developer SDK (Apache-2.0): build a Host (compute serving operators) or an MCP server on Agience, over the wire. No platform IP. Consolidates the former agience-host and the original agience-bridge SDKs; vendors the trust floor (shared with agience-core) so third-party Host/MCP authors can verify tokens standalone."
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Ikailo Inc." }]
@@ -15,6 +15,8 @@ dependencies = [
     "httpx>=0.27",
     "mcp[cli]>=1.6.0",
     "pyjwt[crypto]>=2.8",
+    # Trust floor (bridge.trust): JWT sign/verify + key material.
+    "python-jose[cryptography]>=3.3",
 ]
 
 [project.optional-dependencies]

@@ -5,7 +5,7 @@ meanings fixed by the spec. Each carries the transport status §10 mandates
 (auth → 401, entitlement → 403, not-found → 404, host down → 502/503) so a
 host app can map an exception to an HTTP response uniformly.
 
-    from agience_bridge import AuthError, EntitlementError, install_error_handlers
+    from bridge import AuthError, EntitlementError, install_error_handlers
 
     install_error_handlers(host.app)      # any BridgeError → its §10 status
     raise EntitlementError("missing grant tool:vnd.agience.search+json:run")

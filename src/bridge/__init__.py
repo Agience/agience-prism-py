@@ -5,12 +5,14 @@ over the wire, never linked. No platform IP lives here. Two toolkits in one pack
 (the former `agience-host` compute SDK + the original `agience-bridge` MCP-server SDK,
 consolidated):
 
-    from agience_bridge import Host           # build a Host (compute serving operators)
-    from agience_bridge import create_server  # build an MCP server / Bridge
+    from bridge import Host           # build a Host (compute serving operators)
+    from bridge import create_server  # build an MCP server / Bridge
+    from bridge import sign_service_jwt, verify_jwt  # stand on the trust floor
 
-The full surfaces live under ``agience_bridge.host`` and ``agience_bridge.bridge``; the
-most-used names are re-exported here.
+The full surfaces live under ``bridge.host``, ``bridge.bridge``, and
+``bridge.trust``; the most-used names are re-exported here.
 """
+from . import trust
 from .errors import (
     AuthError,
     BridgeError,
@@ -23,6 +25,18 @@ from .errors import (
 )
 from .host import Host, TokenVerifier
 from .bridge import Bridge, create_server
+from .trust import (
+    SERVICE_NAMES,
+    ServiceIdentity,
+    get_authority_manifest,
+    get_host_id,
+    get_service_identity,
+    init_service_identity,
+    sign_delegation_jwt,
+    sign_service_jwt,
+    verify_delegation_jwt,
+    verify_jwt,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -39,5 +53,17 @@ __all__ = [
     "ProtocolError",
     "http_status_for",
     "install_error_handlers",
+    # trust floor (bridge.trust)
+    "trust",
+    "SERVICE_NAMES",
+    "ServiceIdentity",
+    "get_authority_manifest",
+    "get_host_id",
+    "get_service_identity",
+    "init_service_identity",
+    "sign_delegation_jwt",
+    "sign_service_jwt",
+    "verify_delegation_jwt",
+    "verify_jwt",
     "__version__",
 ]

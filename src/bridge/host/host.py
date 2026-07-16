@@ -7,7 +7,7 @@ so the platform can discover it. Operators mount their own typed routes via
 ``@host.operator(...)``; the handler's annotations drive request/response
 validation.
 
-    from agience_bridge import Host
+    from bridge import Host
 
     host = Host("agience-prism", api_key=os.getenv("EMBEDDINGS_SERVER_API_KEY"))
 

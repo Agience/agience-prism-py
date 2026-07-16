@@ -8,7 +8,7 @@ HTTP client, a server scaffold); **no platform IP**.
 
 Quickstart::
 
-    from agience_bridge import create_server
+    from bridge import create_server
     mcp, bridge = create_server("agience-server-foo")
 
     @mcp.tool(description="…")

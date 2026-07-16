@@ -5,6 +5,7 @@ aliases (`*_API_URI`, `BACKEND_URI`, …):
 
     ORIGIN_URI   identity / auth authority
     MANTLE_URI   artifact store + capability routing
+    CRYSTAL_URI  content-type gateway (artifact operation dispatch)
     CHORUS_URI   host / persona discovery (`.well-known/mcp`)
     KEYS_DIR     host signing / identity keys (signing hosts only)
 
@@ -23,12 +24,13 @@ import os
 import warnings
 from typing import Optional
 
-log = logging.getLogger("agience_bridge.config")
+log = logging.getLogger("bridge.config")
 
 # canonical name -> ordered legacy aliases (first present wins; use warns).
 _ALIASES: dict[str, tuple[str, ...]] = {
     "ORIGIN_URI": (),
     "MANTLE_URI": ("AGIENCE_API_URI",),
+    "CRYSTAL_URI": (),
     "CHORUS_URI": (),
     "KEYS_DIR": (),
 }
@@ -37,6 +39,7 @@ _ALIASES: dict[str, tuple[str, ...]] = {
 _DEFAULTS: dict[str, str] = {
     "ORIGIN_URI": "http://localhost:8080",
     "MANTLE_URI": "http://localhost:8081",
+    "CRYSTAL_URI": "http://localhost:8085",
     "CHORUS_URI": "http://localhost:8082",
 }
 
@@ -83,6 +86,11 @@ def mantle_uri(default: Optional[str] = None) -> str:
     return (resolve("MANTLE_URI", default=default) or "").rstrip("/")
 
 
+def crystal_uri(default: Optional[str] = None) -> str:
+    """Crystal (content-type gateway — artifact op dispatch) base URI, slash stripped."""
+    return (resolve("CRYSTAL_URI", default=default) or "").rstrip("/")
+
+
 def chorus_uri(default: Optional[str] = None) -> str:
     """Chorus (host/persona discovery) base URI, trailing slash stripped."""
     return (resolve("CHORUS_URI", default=default) or "").rstrip("/")
@@ -116,6 +124,7 @@ __all__ = [
     "resolve",
     "origin_uri",
     "mantle_uri",
+    "crystal_uri",
     "chorus_uri",
     "keys_dir",
     "authority_manifest_path",

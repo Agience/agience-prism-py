@@ -19,7 +19,7 @@ import json
 import logging
 from typing import Any, Optional
 
-log = logging.getLogger("agience_bridge")
+log = logging.getLogger("bridge")
 
 
 class Bridge:
@@ -28,17 +28,29 @@ class Bridge:
     Parameters
     ----------
     server_name: the server's identifier (e.g. ``"agience-server-beacon"``).
-    api_uri:     base URI of the Agience core backend.
+    api_uri:     base URI of the Agience core backend (Mantle) — raw CRUD/search.
+    crystal_uri: base URI of Crystal, the content-type gateway, where the client
+                 routes artifact operation dispatch. Defaults to ``$CRYSTAL_URI``.
     api_key:     optional API key for calls made without a user delegation context.
     """
 
-    def __init__(self, server_name: str, api_uri: str, *, api_key: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        server_name: str,
+        api_uri: str,
+        *,
+        crystal_uri: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ) -> None:
+        from .. import config
+
         self.server_name = server_name
         self.api_uri = api_uri.rstrip("/")
+        self.crystal_uri = (crystal_uri or config.crystal_uri()).rstrip("/")
         self._api_key = api_key
         # Per-instance ContextVar so multiple Bridges can coexist in one process.
         self._token: contextvars.ContextVar[str] = contextvars.ContextVar(
-            f"agience_bridge_token_{server_name}", default=""
+            f"bridge_token_{server_name}", default=""
         )
 
     # ------------------------------------------------------------------
@@ -82,7 +94,7 @@ class Bridge:
         return "anonymous"
 
     def client(self, *, timeout: float = 60.0) -> "Any":
-        """Return an :class:`agience_bridge.client.AgienceClient` bound to this Bridge."""
+        """Return an :class:`bridge.client.AgienceClient` bound to this Bridge."""
         from .client import AgienceClient
 
         return AgienceClient(self, timeout=timeout)

@@ -1,6 +1,6 @@
 """Server scaffold — spin up an Agience-integrated MCP server in a few lines.
 
-    from agience_bridge import create_server
+    from bridge import create_server
 
     mcp, bridge = create_server("agience-server-example", instructions="…")
 
@@ -24,19 +24,21 @@ def create_server(
     *,
     instructions: str = "",
     api_uri: Optional[str] = None,
+    crystal_uri: Optional[str] = None,
     api_key: Optional[str] = None,
 ) -> Tuple[object, Bridge]:
     """Build a FastMCP server + an Agience :class:`Bridge` wired for delegation auth.
 
-    ``api_uri`` defaults to the canonical ``$MANTLE_URI`` (§4); ``api_key`` to
-    ``$AGIENCE_API_KEY``. Returns ``(mcp, bridge)`` — define tools on ``mcp``,
-    then serve ``bridge.create_app(mcp)``.
+    ``api_uri`` defaults to the canonical ``$MANTLE_URI`` (§4); ``crystal_uri`` to
+    ``$CRYSTAL_URI``; ``api_key`` to ``$AGIENCE_API_KEY``. Returns ``(mcp, bridge)``
+    — define tools on ``mcp``, then serve ``bridge.create_app(mcp)``.
     """
     from mcp.server.fastmcp import FastMCP  # lazy: importing this package needs no mcp
 
     bridge = Bridge(
         name,
         api_uri or config.mantle_uri(),
+        crystal_uri=crystal_uri,
         api_key=api_key or os.getenv("AGIENCE_API_KEY"),
     )
     mcp = FastMCP(name, instructions=instructions)

@@ -4,7 +4,7 @@ Apache-2.0, permissive on purpose: hosts and operators (first-party or third-
 party, open or closed) embed this without copyleft reaching their code. The AGPL
 platform is reached over the wire, never linked. No platform IP lives here.
 
-    from agience_bridge import Host
+    from bridge import Host
 
     host = Host("agience-prism")
 
