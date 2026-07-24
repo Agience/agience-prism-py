@@ -1,25 +1,25 @@
-# agience-bridge
+# agience-prism-py
 
-The **Agience developer SDK** (Apache-2.0). Build on Agience without copyleft
-reaching your code — the AGPL platform is reached over the wire, never linked.
-No platform IP lives here.
+**An environment adapter** — prism adapts an environment (world ↔ frame) to Agience.
+This is the Python adapter: the **Agience developer SDK** (Apache-2.0). Build on
+Agience without copyleft reaching your code — the AGPL platform is reached over the
+wire, never linked. No platform IP lives here.
 
-`agience-bridge` merges the two former SDKs into one package:
+`agience-prism-py` merges the two former SDKs into one package:
 
-- **`bridge.host`** — build a **Host**: compute that serves operators over HTTP
+- **`prism.host`** — build a **Host**: compute that serves operators over HTTP
   (e.g. Agience Prism, the embeddings host).
-- **`bridge.bridge`** — build an **MCP server / Bridge**: a server that integrates
+- **`prism.server`** — build an **MCP server**: a server that integrates
   with Agience (delegation auth + a core HTTP client + a server scaffold; e.g. Beacon).
 
 ```python
-from bridge import Host, create_server
+from prism import Host, create_server
 ```
 
-The most-used names (`Host`, `TokenVerifier`, `AuthError`, `Bridge`, `create_server`)
-are re-exported at the top level; the full surfaces live under `bridge.host` and
-`bridge.bridge`.
+The most-used names (`Host`, `TokenVerifier`, `AuthError`, `Server`, `create_server`)
+are re-exported at the top level; the full surfaces live under `prism.host` and
+`prism.server`.
 
-> Migrated from `agience-host` + the original `agience-bridge` SDK (briefly packaged as
-> `agience-kit`). Update imports: `agience_host` → `bridge` (or
-> `bridge.host`); `agience_kit` → `bridge`. The old `agience-bridge`
-> **gateway** service is now part of **chorus**, not this SDK.
+> Migrated from `agience-host` + `agience-kit`. Update imports: `agience_host` →
+> `prism.host`; `agience_kit` → `prism`. The old **gateway** service is now
+> **crystal**, not this SDK.

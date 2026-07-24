@@ -1,4 +1,4 @@
-"""Host template — a minimal Agience host built on agience-bridge.
+"""Host template — a minimal Agience host built on agience-prism-py.
 
 A *host* is compute that serves capabilities (operators) over HTTP. Copy this,
 add your operators, deploy it anywhere, and point the platform at its URL
@@ -6,10 +6,10 @@ add your operators, deploy it anywhere, and point the platform at its URL
 over the wire — you never import core.
 
 Run:
-    pip install agience-bridge uvicorn
+    pip install agience-prism-py uvicorn
     python examples/host/host_template.py            # serves on :8083
 """
-from bridge import Host
+from prism import Host
 from pydantic import BaseModel
 
 # api_key=... to require a bearer (proxy URLs are public — set one in prod).

@@ -1,21 +1,22 @@
-"""agience-bridge — the Agience developer SDK (Apache-2.0).
+"""agience-prism-py — an environment adapter: the Agience developer SDK for Python (Apache-2.0).
 
+Prism adapts an environment (world <-> frame) to Agience.
 Build on Agience without copyleft reaching your code: the AGPL platform is reached
 over the wire, never linked. No platform IP lives here. Two toolkits in one package
-(the former `agience-host` compute SDK + the original `agience-bridge` MCP-server SDK,
+(the former `agience-host` compute SDK + the original `agience-prism-py` MCP-server SDK,
 consolidated):
 
-    from bridge import Host           # build a Host (compute serving operators)
-    from bridge import create_server  # build an MCP server / Bridge
-    from bridge import sign_service_jwt, verify_jwt  # stand on the trust floor
+    from prism import Host           # build a Host (compute serving operators)
+    from prism import create_server  # build an MCP server
+    from prism import sign_service_jwt, verify_jwt  # stand on the trust floor
 
-The full surfaces live under ``bridge.host``, ``bridge.bridge``, and
-``bridge.trust``; the most-used names are re-exported here.
+The full surfaces live under ``prism.host``, ``prism.server``, and
+``prism.trust``; the most-used names are re-exported here.
 """
 from . import trust
 from .errors import (
     AuthError,
-    BridgeError,
+    PrismError,
     CapabilityNotFound,
     EntitlementError,
     HostUnavailable,
@@ -24,7 +25,7 @@ from .errors import (
     install_error_handlers,
 )
 from .host import Host, TokenVerifier
-from .bridge import Bridge, create_server
+from .server import Server, create_server
 from .trust import (
     SERVICE_NAMES,
     ServiceIdentity,
@@ -42,10 +43,10 @@ __version__ = "0.1.0"
 __all__ = [
     "Host",
     "TokenVerifier",
-    "Bridge",
+    "Server",
     "create_server",
     # typed error set (§10)
-    "BridgeError",
+    "PrismError",
     "AuthError",
     "EntitlementError",
     "CapabilityNotFound",
@@ -53,7 +54,7 @@ __all__ = [
     "ProtocolError",
     "http_status_for",
     "install_error_handlers",
-    # trust floor (bridge.trust)
+    # trust floor (prism.trust)
     "trust",
     "SERVICE_NAMES",
     "ServiceIdentity",

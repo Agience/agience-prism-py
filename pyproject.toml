@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agience-bridge"
+name = "agience-prism-py"
 version = "0.1.0"
-description = "Agience Bridge — the developer SDK (Apache-2.0): build a Host (compute serving operators) or an MCP server on Agience, over the wire. No platform IP. Consolidates the former agience-host and the original agience-bridge SDKs; vendors the trust floor (shared with agience-core) so third-party Host/MCP authors can verify tokens standalone."
+description = "Agience Prism — an environment adapter: the Python developer SDK (Apache-2.0). Build a Host (compute serving operators) or an MCP server on Agience, over the wire. No platform IP. Consolidates the former agience-host and the original SDKs; vendors the trust floor (shared with agience-beam) so third-party Host/MCP authors can verify tokens standalone."
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Ikailo Inc." }]
@@ -15,9 +15,17 @@ dependencies = [
     "httpx>=0.27",
     "mcp[cli]>=1.6.0",
     "pyjwt[crypto]>=2.8",
-    # Trust floor (bridge.trust): JWT sign/verify + key material.
+    # Trust floor (prism.trust): JWT sign/verify + key material.
     "python-jose[cryptography]>=3.3",
 ]
+
+[project.scripts]
+# The `prism` CLI (prism/cli.py): init / list / install / publish. `install` and
+# `publish` verify through beam.crystal_model (agience-beam, Apache — the crystal
+# contract's common ground); beam is imported lazily at command run and is expected
+# from the environment, matching the workspace convention (editable installs), since
+# agience-beam is not published on PyPI.
+prism = "prism.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.4"]

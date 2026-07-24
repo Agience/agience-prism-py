@@ -6,8 +6,8 @@ language — and flags the one term that collides.
 
 ## Agience vocabulary
 
-- **agience-host / Bridge** — the SDKs you *embed* to build a host. **agience-host** = the
-  compute/operator flavor; **Bridge** = the MCP-server flavor. Permissive; no
+- **prism** (`prism.host` / `prism.server`) — the SDK you *embed* to build a host.
+  **`prism.host`** = the compute/operator flavor; **`prism.server`** = the MCP-server flavor. Permissive; no
   platform IP. A host *is/has* one or both.
 - **Host** — COMPUTE that connects to the platform and exposes one or more
   capabilities. **Hosts live in their own repos and depend on the SDK — never
@@ -26,7 +26,7 @@ the model and contains clients) → **Client** (1:1 with a server) → **Server*
 
 | Agience | MCP | Notes |
 |---|---|---|
-| agience-host / Bridge (SDK) | the MCP server SDK | Bridge already wraps FastMCP |
+| prism (SDK) | the MCP server SDK | `prism.server` already wraps FastMCP |
 | **Host** (compute) | **Server** | ⚠️ name clash — see below |
 | **Capability / operator** | a **capability**, exposed as a **tool** (or resource) | `embeddings.embed` is a tool the host exposes; advertised via capability negotiation |
 | **Artifact** | **Resource** (`agience://…`) | Agience already serves artifacts as MCP resources |
@@ -47,7 +47,7 @@ read it as *capability provider / MCP server*, **not** MCP's "host."
 
 A **Chorus persona** and the **embeddings host** are the *same shape*: compute (a
 host) exposing capabilities (MCP **tools** / **resources**), built on the SDK — the
-persona via the **bridge** (MCP flavor), embeddings via the **agience-host** (compute
+persona via **`prism.server`** (MCP flavor), embeddings via **`prism.host`** (compute
 flavor). **Beacon** is the same, with *closed* capabilities, entitlement-gated. The
 existing scope grammar `resource|tool|prompt : mime : action` is already MCP
 primitives — a capability is invoked through the `tool` scope on a content type.

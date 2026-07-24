@@ -266,7 +266,23 @@ class TokenVerifier:
             return False
 
     def _match_api_key(self, presented: str) -> bool:
-        return any(_secrets.compare_digest(presented, k) for k in self._all_api_keys())
+        """Constant-time compare against every configured key.
+
+        ⛔ COMPARED AS `str`, WHICH RAISES ON NON-ASCII AND 500s BEFORE AUTH.
+        `secrets.compare_digest` on two `str` raises
+        `TypeError: comparing strings with non-ASCII characters is not supported`, and
+        `_auth_dep` catches only `AuthError` — so a raw header like
+        `Authorization: Bearer k\\xe9y` (Starlette decodes headers latin-1) propagated out of the
+        ASGI app as a **500 with a full traceback, from an unauthenticated caller, on the
+        pre-auth path**. Not a bypass — a 500 still denies — but a remotely-triggerable unhandled
+        exception reachable before authentication, and it leaks a stack trace.
+        Encoding both sides to bytes keeps the comparison constant-time and total."""
+        try:
+            presented_b = presented.encode("utf-8", "surrogatepass")
+        except Exception:
+            return False
+        return any(_secrets.compare_digest(presented_b, k.encode("utf-8", "surrogatepass"))
+                   for k in self._all_api_keys())
 
 
 __all__ = ["TokenVerifier", "AuthError"]

@@ -14,7 +14,7 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from bridge import AuthError, TokenVerifier
+from prism import AuthError, TokenVerifier
 
 
 @pytest.fixture(scope="module")

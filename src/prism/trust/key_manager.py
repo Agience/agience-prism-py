@@ -299,33 +299,17 @@ def delete_setup_token(path: Optional[Path] = None) -> None:
 
 
 # ---------------------------------------------------------------------------
-#  Infrastructure credentials (ArangoDB, OpenSearch, MinIO)
+#  Infrastructure credentials (MinIO)
 # ---------------------------------------------------------------------------
+# ⛔ AN ARANGODB ROOT-PASSWORD LOADER STOOD HERE — `keys/arango.pass`, an init/get pair, and a
+# comment explaining that the FILENAME could not be renamed because three running boxes would fail
+# to start. It had ZERO callers (verified by grep across every repo). It was dead code holding a
+# credential for a database the system does not run, and stale credentials on disk are worse than
+# no credentials. Removed with the engine [John, 2026-07-23: "take out arcade and take out arango"].
 
-_DEFAULT_ARANGO_PASS_PATH = KEYS_DIR / "arango.pass"
 _DEFAULT_MINIO_PASS_PATH = KEYS_DIR / "minio.pass"
 
-_arango_password: Optional[str] = None
 _minio_pass: Optional[str] = None
-
-
-def init_arango_password(path: Optional[Path] = None) -> None:
-    """Load ArangoDB root password from key file. File must already exist."""
-    global _arango_password
-    pass_path = path or _DEFAULT_ARANGO_PASS_PATH
-    if not pass_path.exists():
-        raise RuntimeError(
-            f"ArangoDB password file not found at {pass_path}. "
-            "Ensure the init container has run before starting the backend."
-        )
-    _arango_password = pass_path.read_text().strip()
-    logger.info("ArangoDB password loaded from %s", pass_path)
-
-
-def get_arango_password() -> str:
-    if _arango_password is None:
-        raise RuntimeError("ArangoDB password not initialized -- call init_arango_password() at startup")
-    return _arango_password
 
 
 def init_minio_password(path: Optional[Path] = None) -> None:

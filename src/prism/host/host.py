@@ -7,7 +7,7 @@ so the platform can discover it. Operators mount their own typed routes via
 ``@host.operator(...)``; the handler's annotations drive request/response
 validation.
 
-    from bridge import Host
+    from prism import Host
 
     host = Host("agience-prism", api_key=os.getenv("EMBEDDINGS_SERVER_API_KEY"))
 
@@ -74,7 +74,24 @@ class Host:
         # Nothing configured = open host (historical default). Explicit args win
         # over the generic HOST_* env fallbacks so an embedding host can map its
         # own env names (e.g. EMBEDDINGS_SERVER_API_KEY) onto these.
-        raw = api_key if api_key is not None else os.getenv("HOST_API_KEY", "")
+        # ⛔ `api_key=""` USED TO SUPPRESS THE ENV FALLBACK AND OPEN THE HOST.
+        # The test was `api_key is not None`, so an EMPTY STRING counted as "the caller configured
+        # auth" — the env fallback was skipped, `if raw:` below then added nothing, and the host
+        # booted with zero keys. This class's own docstring shows the pattern
+        # `api_key=os.getenv("EMBEDDINGS_SERVER_API_KEY")`, and the near-universal variant
+        # `os.getenv("X", "")` — or any deploy passing an empty-string secret — lands exactly here.
+        # Measured: with `HOST_API_KEY=prod-secret-key` present in the environment,
+        # `Host('demo', api_key='')` produced `api_keys=()` and `enabled=False` — a fully OPEN host
+        # while a valid key sat unused in the env, marked only by a log line.
+        # An empty string is not a credential; treat it as absent and fall back.
+        raw = api_key if api_key else os.getenv("HOST_API_KEY", "")
+        # ⛔ A BARE STRING IN `api_keys` BECAME A PER-CHARACTER ALLOWLIST.
+        # `list("mysecretkey")` is `['m','y','s',...]`, so `Host(..., api_keys="mysecretkey")`
+        # authenticated `Authorization: Bearer m` — the credential space collapsed to single
+        # characters, brute-forceable in under 100 attempts. `api_keys` is documented as a
+        # collection; a caller passing one key as a plain string means one key.
+        if isinstance(api_keys, str):
+            api_keys = [k for k in api_keys.split(",")]
         key_candidates: list[str] = list(api_keys or [])
         if raw:
             key_candidates.extend(raw.split(","))
@@ -125,7 +142,7 @@ class Host:
 
         self.app = FastAPI(title=f"agience-host:{name}", lifespan=self._lifespan)
         self.app.add_api_route("/health", self._health, methods=["GET"])
-        # Any BridgeError raised by an operator maps to its §10 transport status.
+        # Any PrismError raised by an operator maps to its §10 transport status.
         install_error_handlers(self.app)
 
     # -- auth ---------------------------------------------------------------
@@ -134,6 +151,23 @@ class Host:
             self.verifier.verify(authorization)
         except AuthError:
             raise HTTPException(status_code=401, detail="invalid or missing credentials")
+
+    @property
+    def auth_dependency(self):
+        """The same credential check ``@host.operator`` applies, for hand-mounted routes.
+
+        Auth here is a PER-ROUTE dependency, not middleware — it is attached only by
+        ``operator()``. So any route registered straight onto ``host.app`` (``@app.post(...)``)
+        is COMPLETELY UNAUTHENTICATED, and nothing in the type system or at startup says so.
+        That is not hypothetical: agience-lumen mounted ``/api/chat``, ``/api/chat/stream`` and
+        ``/api/history`` this way and served unauthenticated GPU inference from them while the
+        equivalent ``/v1/chat/completions`` operator route correctly returned 401.
+
+        The safe path has to be reachable, not just documented::
+
+            app.add_api_route("/thing", fn, dependencies=[Depends(host.auth_dependency)])
+        """
+        return self._auth_dep
 
     # -- operators ----------------------------------------------------------
     def operator(

@@ -1,10 +1,10 @@
-"""AgienceClient — typed HTTP helpers to Agience core, authed via a Bridge.
+"""AgienceClient — typed HTTP helpers to Agience core, authed via a Server.
 
 Thin wrapper over ``httpx`` that prefixes the right plane's base URI and attaches
-the Bridge's delegation/API-key headers. Each call is routed by path: artifact
+the Server's delegation/API-key headers. Each call is routed by path: artifact
 OPERATIONS (``/artifacts/{id}/op/*``, ``/create``, ``/resolve/*``, ``/embed``)
-dispatch through Crystal, the content-type gateway (``bridge.crystal_uri``); raw
-CRUD, search and events stay on Mantle (``bridge.api_uri``). Crystal forwards the
+dispatch through Crystal, the content-type gateway (``server.crystal_uri``); raw
+CRUD, search and events stay on Mantle (``server.api_uri``). Crystal forwards the
 caller's token and Mantle/personas still enforce keyed access. Functions raise
 ``httpx`` errors; callers (server tools) shape them into results.
 """
@@ -16,15 +16,15 @@ from typing import Any, List, Optional
 
 import httpx
 
-from .auth import Bridge
+from .auth import Server
 
-# artifact op dispatch — the paths Crystal owns (mirrors facet + bridge-js).
+# artifact op dispatch — the paths Crystal owns (mirrors facet + prism-js).
 _OP_PATH = re.compile(r"/artifacts/[^/]+/op/")
 
 
 class AgienceClient:
-    def __init__(self, bridge: Bridge, *, timeout: float = 60.0) -> None:
-        self._b = bridge
+    def __init__(self, server: Server, *, timeout: float = 60.0) -> None:
+        self._b = server
         self._timeout = timeout
 
     def _base_for(self, path: str) -> str:

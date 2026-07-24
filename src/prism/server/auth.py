@@ -1,12 +1,12 @@
-"""Agience Bridge — delegation auth for MCP servers integrating with Agience.
+"""Agience Prism — delegation auth for MCP servers integrating with Agience.
 
-The :class:`Bridge` captures the inbound delegation token a request carries (the
+The :class:`Server` captures the inbound delegation token a request carries (the
 token Agience issued FOR this server) and forwards it on outbound calls, so
 Agience authorizes as the **end user** — the server never holds standing user
 credentials. For server-to-server calls with no user context, an optional API
 key is used instead.
 
-No `agience-core` dependency (Beacon and third-party closed servers can use this
+No `agience-beam` dependency (Beacon and third-party closed servers can use this
 freely — see the repo's Apache-2.0 license vs core's AGPL). Tokens are decoded
 UNVERIFIED only to surface a user id for logging; **Agience is the verifier**.
 """
@@ -19,10 +19,10 @@ import json
 import logging
 from typing import Any, Optional
 
-log = logging.getLogger("bridge")
+log = logging.getLogger("prism.server")
 
 
-class Bridge:
+class Server:
     """Per-server integration handle: inbound token capture + outbound auth.
 
     Parameters
@@ -48,9 +48,9 @@ class Bridge:
         self.api_uri = api_uri.rstrip("/")
         self.crystal_uri = (crystal_uri or config.crystal_uri()).rstrip("/")
         self._api_key = api_key
-        # Per-instance ContextVar so multiple Bridges can coexist in one process.
+        # Per-instance ContextVar so multiple Servers can coexist in one process.
         self._token: contextvars.ContextVar[str] = contextvars.ContextVar(
-            f"bridge_token_{server_name}", default=""
+            f"prism_token_{server_name}", default=""
         )
 
     # ------------------------------------------------------------------
@@ -94,14 +94,14 @@ class Bridge:
         return "anonymous"
 
     def client(self, *, timeout: float = 60.0) -> "Any":
-        """Return an :class:`bridge.client.AgienceClient` bound to this Bridge."""
+        """Return an :class:`prism.server.client.AgienceClient` bound to this Server."""
         from .client import AgienceClient
 
         return AgienceClient(self, timeout=timeout)
 
 
 class _CaptureTokenMiddleware:
-    """ASGI middleware: store the inbound bearer token in the Bridge's ContextVar
+    """ASGI middleware: store the inbound bearer token in the Server's ContextVar
     for the duration of the request. Non-HTTP scopes pass straight through."""
 
     def __init__(self, app: Any, token_var: contextvars.ContextVar) -> None:

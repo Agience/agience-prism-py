@@ -1,40 +1,40 @@
-"""Server template — a minimal Agience MCP server built on agience-bridge.
+"""Server template — a minimal Agience MCP server built on agience-prism-py.
 
 A *server* exposes MCP tools/resources to agents, authorized as the calling
-**user**: the Bridge captures the inbound delegation token and forwards it on
+**user**: the Server captures the inbound delegation token and forwards it on
 outbound calls, so the server only ever acts within that user's authorization.
 Copy this, add your tools, run it, then register it as a
 `vnd.agience.mcp-server+json` artifact so the Chorus gateway routes to it.
 
-A *host* (agience-bridge) can run servers like this directly, controlled by
+A *host* (agience-prism-py) can run servers like this directly, controlled by
 artifacts — see examples/host/host_template.py for the compute side.
 
 Run:
-    pip install agience-bridge uvicorn
-    AGIENCE_API_URI=http://localhost:8081 python examples/bridge/server_template.py
+    pip install agience-prism-py uvicorn
+    AGIENCE_API_URI=http://localhost:8081 python examples/server/server_template.py
 """
 import json
 
-from bridge import create_server
+from prism import create_server
 
-mcp, bridge = create_server(
+mcp, server = create_server(
     "agience-server-example",
-    instructions="Example server demonstrating agience-bridge.",
+    instructions="Example server demonstrating agience-prism-py.",
 )
 
 
 @mcp.tool(description="Echo a message back, with the calling user's id.")
 async def echo(message: str) -> str:
-    return json.dumps({"echo": message, "user": bridge.get_user_id()})
+    return json.dumps({"echo": message, "user": server.get_user_id()})
 
 
 @mcp.tool(description="Search the caller's authorized artifacts via Agience.")
 async def search(query: str, size: int = 10) -> str:
-    result = await bridge.client().search_query(query_text=query, candidate_budget=size * 5)
+    result = await server.client().search_query(query_text=query, candidate_budget=size * 5)
     return json.dumps(result)
 
 
-app = bridge.create_app(mcp)  # ASGI app; captures the inbound delegation token
+app = server.create_app(mcp)  # ASGI app; captures the inbound delegation token
 
 
 if __name__ == "__main__":

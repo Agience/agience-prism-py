@@ -10,4 +10,4 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           pip install .
-          python -c "from bridge import Host, create_server, Bridge, TokenVerifier, AuthError; print('agience-bridge SDK OK')"
+          python -c "from prism import Host, create_server, Server, TokenVerifier, AuthError; print('agience-prism-py SDK OK')"

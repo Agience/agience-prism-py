@@ -1,6 +1,6 @@
 """AgienceClient plane routing: artifact OPERATIONS dispatch through Crystal (the
 content-type gateway); raw CRUD + search stay on Mantle. Mirrors facet + the JS
-bridge so every caller agrees on which plane owns a path.
+server so every caller agrees on which plane owns a path.
 
 Pure unit tests — httpx.AsyncClient is monkeypatched, no network."""
 
@@ -9,8 +9,8 @@ from contextlib import asynccontextmanager
 
 import pytest
 
-from bridge import Bridge
-from bridge.bridge.client import AgienceClient
+from prism import Server
+from prism.server.client import AgienceClient
 
 MANTLE = "http://mantle.test:8081"
 CRYSTAL = "http://crystal.test:8085"
@@ -45,18 +45,18 @@ async def _fake_async_client(urls):
 def urls(monkeypatch):
     seen: list[str] = []
     monkeypatch.setattr(
-        "bridge.bridge.client.httpx.AsyncClient",
+        "prism.server.client.httpx.AsyncClient",
         lambda *a, **k: _fake_async_client(seen),
     )
     return seen
 
 
 def _client():
-    return AgienceClient(Bridge("t", MANTLE, crystal_uri=CRYSTAL, api_key="agc_test"))
+    return AgienceClient(Server("t", MANTLE, crystal_uri=CRYSTAL, api_key="agc_test"))
 
 
 def test_crystal_uri_defaults_from_env():
-    b = Bridge("t", MANTLE)
+    b = Server("t", MANTLE)
     assert b.crystal_uri == "http://localhost:8085"
     assert b.api_uri == MANTLE
 

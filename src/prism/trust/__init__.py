@@ -1,4 +1,4 @@
-"""bridge.trust — the Agience trust floor (Apache-2.0).
+"""prism.trust — the Agience trust floor (Apache-2.0).
 
 The shared platform-service identity + JWT signing/verification + key management that
 every Agience *app* component (Origin, Chorus, the gateway) — and any third-party
@@ -6,8 +6,8 @@ Host or MCP server — stands on. No platform IP: just the auth plumbing. The fl
 reads ``KEYS_DIR`` straight from the environment; the app configures the library,
 never the reverse.
 
-    from bridge.trust import service_identity, authority_trust, key_manager
-    from bridge.trust import sign_service_jwt, verify_jwt
+    from prism.trust import service_identity, authority_trust, key_manager
+    from prism.trust import sign_service_jwt, verify_jwt
 
 Deliberately NOT a dependency of Mantle — the database verifies tokens via a thin
 issuer+JWKS seam and never signs, so it stays application-agnostic.

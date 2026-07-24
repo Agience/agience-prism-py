@@ -1,6 +1,6 @@
-"""Canonical configuration (Bridge Protocol §4 + Appendix).
+"""Canonical configuration (Prism Protocol §4 + Appendix).
 
-A bridge reads **only** canonical platform variable names and MUST NOT invent
+A server reads **only** canonical platform variable names and MUST NOT invent
 aliases (`*_API_URI`, `BACKEND_URI`, …):
 
     ORIGIN_URI   identity / auth authority
@@ -24,7 +24,7 @@ import os
 import warnings
 from typing import Optional
 
-log = logging.getLogger("bridge.config")
+log = logging.getLogger("prism.config")
 
 # canonical name -> ordered legacy aliases (first present wins; use warns).
 _ALIASES: dict[str, tuple[str, ...]] = {
@@ -35,7 +35,7 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "KEYS_DIR": (),
 }
 
-# dev-friendly localhost defaults, matching agience-core's port assignments.
+# dev-friendly localhost defaults, matching agience-beam's port assignments.
 _DEFAULTS: dict[str, str] = {
     "ORIGIN_URI": "http://localhost:8080",
     "MANTLE_URI": "http://localhost:8081",
@@ -65,7 +65,7 @@ def resolve(name: str, *, default: Optional[str] = None) -> Optional[str]:
                 _warned.add(alias)
                 warnings.warn(
                     f"{alias} is deprecated; set {name} instead "
-                    "(Bridge Protocol §4 — canonical config names).",
+                    "(Prism Protocol §4 — canonical config names).",
                     DeprecationWarning,
                     stacklevel=2,
                 )
