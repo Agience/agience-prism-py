@@ -5,19 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agience-prism-py"
 version = "0.1.0"
-description = "Agience Prism — an environment adapter: the Python developer SDK (Apache-2.0). Build a Host (compute serving operators) or an MCP server on Agience, over the wire. No platform IP. Consolidates the former agience-host and the original SDKs; vendors the trust floor (shared with agience-beam) so third-party Host/MCP authors can verify tokens standalone."
+description = "Agience Prism — an environment adapter: the Python developer SDK (Apache-2.0). The base install is the CONTRACT and has no dependencies; Host, MCP-server and trust-floor surfaces are extras. Build on Agience over the wire — no platform IP, no copyleft reaching your code."
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Ikailo Inc." }]
-dependencies = [
-    "fastapi>=0.110",
-    "uvicorn[standard]>=0.27",
-    "httpx>=0.27",
-    "mcp[cli]>=1.6.0",
-    "pyjwt[crypto]>=2.8",
-    # Trust floor (prism.trust): JWT sign/verify + key material.
-    "python-jose[cryptography]>=3.3",
-]
+# ⛔ THE BASE INSTALL IS THE CONTRACT, AND IT HAS NO DEPENDENCIES. THAT IS THE POINT (2026-07-30).
+#
+# It used to list all six of fastapi, uvicorn, httpx, mcp, pyjwt and python-jose, because
+# `prism/__init__.py` imported host/server/trust eagerly. So reading one constant cost a web
+# framework — and that weight had a measured consequence: `agience-beam` would not depend on this
+# package at all and VENDORED a byte-identical `canonical.py`, with `agience-bundle` doing the same
+# for its bare installer. Three copies of the code that decides every content address and every
+# signature, kept in step by a gate, because the SDK could not be imported cheaply.
+#
+# The contract — canonical JSON, crystal_model, capabilities, config, errors, structural,
+# environment — is 1,012 lines of pure stdlib. Shipping it dependency-free lets beam import it,
+# which is what collapses the vendoring. Enforced by `tests/test_contract_install_is_pure.py`.
+dependencies = []
 
 [project.scripts]
 # The `prism` CLI (prism/cli.py): init / list / install / publish. `install` and
@@ -28,7 +32,16 @@ dependencies = [
 prism = "prism.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.4"]
+# The RUNTIME surfaces. Each names only what its own modules import — asking for one must not drag
+# in the others, or the split is cosmetic.
+trust = ["python-jose[cryptography]>=3.3", "cryptography>=42"]   # prism.trust — sign/verify, keys
+host = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "httpx>=0.27", "pyjwt[crypto]>=2.8"]
+server = ["mcp[cli]>=1.6.0", "httpx>=0.27"]                      # prism.server — MCP scaffold
+cli = ["cryptography>=42", "httpx>=0.27"]                        # the `prism` command
+vector = ["numpy>=1.24"]                                         # prism.vector — unit/cosine primitives
+
+all = ["agience-prism-py[trust,host,server,cli,vector]"]
+dev = ["agience-prism-py[all]", "pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

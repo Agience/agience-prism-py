@@ -10,8 +10,7 @@ language — and flags the one term that collides.
   **`prism.host`** = the compute/operator flavor; **`prism.server`** = the MCP-server flavor. Permissive; no
   platform IP. A host *is/has* one or both.
 - **Host** — COMPUTE that connects to the platform and exposes one or more
-  capabilities. **Hosts live in their own repos and depend on the SDK — never
-  inside it.**
+  capabilities. **Hosts live in their own repos and depend on the SDK.**
 - **Capability** (= operator / skill) — a unit of work a host exposes and runs,
   e.g. `embeddings.embed`. Used by a host; operates on artifacts.
 - **Artifact** — the data a capability reads/writes.
@@ -40,10 +39,10 @@ the **compute that exposes capabilities** — which is MCP's **Server** role.
 > **An Agience host presents as an MCP server.** MCP's "host" role (the AI app) is,
 > in Agience, Facet / the agent / Mantle's gateway.
 
-We keep "Host" (it's entrenched: `vnd.agience.host+json`, `package/hosts/`), but
-read it as *capability provider / MCP server*, **not** MCP's "host."
+Agience's "Host" — `vnd.agience.host+json`, `package/hosts/` — reads as
+*capability provider / MCP server*.
 
-## Why this unifies Agience
+## One shape
 
 A **Chorus persona** and the **embeddings host** are the *same shape*: compute (a
 host) exposing capabilities (MCP **tools** / **resources**), built on the SDK — the

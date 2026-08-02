@@ -56,6 +56,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from . import config
+from .canonical import canonical_string as _jcs_string
 
 BUNDLE_CONTENT_TYPE = "application/vnd.agience.bundle+json"
 CRYSTAL_CONTENT_TYPE = "application/vnd.agience.crystal+json"
@@ -126,7 +127,7 @@ def _canonical_payload(content: Any) -> bytes:
         return bytes(content)
     if isinstance(content, str):
         return content.encode("utf-8")
-    return json.dumps(content, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    return _jcs_string(content).encode("utf-8")
 
 
 def _sha256_of(content: Any) -> str:
@@ -162,11 +163,26 @@ def cmd_init(args: argparse.Namespace) -> int:
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
 
+    from .capabilities import CAPABILITY_KINDS, is_known_capability
+
     keys_dir = _keys_dir(args.keys_dir)
     keys_dir.mkdir(parents=True, exist_ok=True)
     priv_path = keys_dir / "host.private.pem"
     pub_path = keys_dir / "host.public.pem"
     manifest_path = keys_dir / MANIFEST_NAME
+
+    # Validate BEFORE generating a keypair: failing afterwards would leave an identity behind and
+    # the retry would then refuse as "already exists". The manifest is an ADVERTISEMENT the host
+    # signs — an unknown kind here is advertised to the platform and rejected at validation, which
+    # is how prism-c's `storage`/`webgpu` went unnoticed. Refuse the typo at the source.
+    caps = sorted({c.strip() for c in (args.capabilities or "compute.local").split(",")
+                   if c.strip()})
+    unknown = [c for c in caps if not is_known_capability(c)]
+    if unknown:
+        print("prism init: unknown capability kind(s): %s" % ", ".join(unknown))
+        print("  base vocabulary: %s" % ", ".join(sorted(CAPABILITY_KINDS)))
+        print("  (sensor.* / actuator.* are OPEN families — any member is valid.)")
+        return EXIT_ERROR
 
     if priv_path.exists() and not args.force:
         # never clobber an identity — a regenerated key is a DIFFERENT prism.
@@ -183,8 +199,6 @@ def cmd_init(args: argparse.Namespace) -> int:
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo))
 
-    caps = sorted({c.strip() for c in (args.capabilities or "compute.local").split(",")
-                   if c.strip()})
     manifest = {"name": args.name, "environment": "py", "capabilities": caps,
                 "public_key": "host.public.pem"}
     manifest_path.write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n",
@@ -259,8 +273,8 @@ def cmd_install(args: argparse.Namespace) -> int:
     keys_dir = _keys_dir(args.keys_dir)
     caps = _capabilities(keys_dir)
     if caps is None:
-        print("prism install: no local manifest — run `prism init` first (installing "
-              "without an advertised capability set cannot be gated honestly)")
+        print("prism install: no local manifest — run `prism init` first (the install gate "
+              "needs an advertised capability set)")
         return EXIT_ERROR
 
     artifact = _http_get("%s/artifacts/%s" % (mantle, args.bundle), token)

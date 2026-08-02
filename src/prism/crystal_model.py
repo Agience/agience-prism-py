@@ -30,6 +30,9 @@ import hashlib
 import json
 from typing import Any, Dict, List
 
+from .canonical import canonical_json as _canonical_json
+from .capabilities import OPEN_FAMILIES  # stdlib-only sibling; keeps the bare-host guarantee
+
 CRYSTAL_CONTENT_TYPE = "application/vnd.agience.crystal+json"
 
 #: A facet is a signal CONDUIT, bidirectional. A human view is a facet whose far side is a
@@ -52,9 +55,36 @@ _REQUIRED = ("name", "facets", "tektons", "created_by")
 
 
 def canonical_json(obj: Any) -> bytes:
-    """Sorted-keys, no-whitespace JSON bytes — the same logical crystal always hashes the same
-    on any host (the property that makes the sha a stable cross-environment ref)."""
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    """RFC 8785 (JCS) canonical JSON bytes — re-exported from the ONE source, `prism.canonical`.
+
+    Kept as a name here because every existing importer uses `crystal_model.canonical_json`; the
+    implementation lives in `prism/canonical.py` so beam and the bare-environment installer can vendor
+    a byte-identical copy (their vendoring is gated — see that module's header).
+    """
+    return _canonical_json(obj)
+
+
+#: The fields a BUNDLE's sha256 covers, in the order the payload is built.
+#:
+#: ⚠ THE PUBLISHER AND THE VERIFIER MUST AGREE, AND ONE OF THEM NO LONGER EXISTS.
+#: `ember/runtime/runner.py::_canonical` carried this tuple with the docstring "build_bundles.
+#: canonical, reproduced exactly (keys, ordering, separators) — the runner must recompute the SAME
+#: payload the publisher hashed, or verification means nothing." `build_bundles.py` is GONE from the
+#: tree, so what remained was a reproduction of an absent original: nothing to check it against, and
+#: no definition for a future publisher to build to.
+#:
+#: It lives here because a bundle's manifest shape is a CONTRACT, next to `crystal_sha` which does
+#: the same job for a crystal. Anyone writing the publisher back should implement it against this.
+BUNDLE_SHA_FIELDS = ("group", "entry_module", "register_fns", "host_seams", "modules")
+
+
+def bundle_canonical(bundle: Dict[str, Any]) -> bytes:
+    """The bytes a BUNDLE's sha256 is taken over — the manifest fields, canonically serialized.
+
+    Raises KeyError on a malformed bundle rather than hashing a partial payload: a sha over four of
+    five fields is a valid-looking hash of the wrong thing."""
+    payload = {k: bundle[k] for k in BUNDLE_SHA_FIELDS}
+    return canonical_json(payload)
 
 
 def crystal_sha(crystal: Dict[str, Any]) -> str:
@@ -101,6 +131,24 @@ def validate(crystal: Dict[str, Any]) -> List[str]:
     if organons is not None:
         if not isinstance(organons, list) or not all(isinstance(o, dict) and o.get("name") for o in organons):
             p.append("organons must be a list of named objects")
+        else:
+            # 🔴 THE SPELLING CHECK WAS MISSING HERE AND PRESENT IN prism-js (added 2026-07-29,
+            # Contract Builder). Measured: on a crystal requiring `totally.bogus`, JavaScript reported
+            # the unknown kind and Python reported nothing — so **Python, which is the canonical
+            # implementation AND the side that SIGNS crystals** (`crystal_artifact`), would validate and
+            # sign a requirement no platform will honour. prism-js's own comment names this exact
+            # failure mode: *"an unknown kind here would be signed into an artifact and then refused by
+            # the platform (how prism-c shipped `webgpu`)"* — and the signer was the one without the
+            # guard.
+            # SPELLING, NOT MATCHING: `is_known_capability` accepts open-family members
+            # (`sensor.*` / `actuator.*`) by prefix, so this refuses typos without refusing real
+            # devices. Matching is propagation's job (`capability_reach`), never this function's.
+            # Message text is byte-identical to prism-js's so the shared vectors can pin both.
+            from .capabilities import is_known_capability
+            for o in organons:
+                for r in o.get("requires") or []:
+                    if not is_known_capability(r):
+                        p.append("organon %s: unknown capability kind %s" % (o.get("name"), r))
     seed = crystal.get("lattice_seed")
     if seed is not None and not isinstance(seed, dict):
         p.append("lattice_seed must be an object {artifacts?, collections?}")
@@ -116,11 +164,64 @@ def required_capabilities(crystal: Dict[str, Any]) -> List[str]:
     return sorted(caps)
 
 
+def _family_of(kind: str) -> Any:
+    """The OPEN family a capability belongs to (`sensor.` / `actuator.`), or None. A bare prefix is
+    not a member of its own family — `sensor.` names no device."""
+    for p in OPEN_FAMILIES:
+        if kind.startswith(p) and len(kind) > len(p):
+            return p
+    return None
+
+
+def capability_reach(required: List[str], advertised: List[str]) -> List[Dict[str, Any]]:
+    """MEASURE the junction instead of testing membership: for each required capability, the
+    NEAREST thing this prism affords, and how far away it is.
+
+    Returns one entry per requirement: `{"required", "matched", "basis", "hops"}` where basis is
+    `"exact"` (0 hops), `"family"` (1 hop — a different member of the same OPEN family, e.g. the
+    crystal wants `sensor.temperature` and the prism affords `sensor.capture`), or `None` (out of
+    reach entirely). This is what lets a refusal name a REACH gap rather than a spelling gap.
+
+    ⚠ SEAM (flagged, honest default — [[no-arbitrary-caps]]). A 1-hop family neighbour is REPORTED
+    but does NOT satisfy the gate below, and that is deliberate: `sensor.thermal` is not a
+    substitute for `sensor.temperature` just because both are sensors, and inventing a
+    "near enough" threshold here would be fitting. Whether family-nearness may SATISFY is John's
+    call and belongs AFTER the grant gate lands (`NEXT.md §Q` — discharge is authorized by the grant
+    on the energy, not by owning a name), because loosening the match before authorization moves is
+    a straight widening of the permission surface.
+
+    ⚠ Note the STRUCTURAL limit: this module is stdlib-only on purpose, so a bare host can verify a
+    crystal BEFORE grounding it. Geodesic/measured propagation (`match.select`, `spread_graph`)
+    needs the geometry store and therefore cannot run here — the true propagation match belongs on
+    the side that carries the lattice (ember/chorus), with this junction reporting structural reach.
+    """
+    adv = [a for a in (advertised or [])]
+    adv_set = set(adv)
+    out: List[Dict[str, Any]] = []
+    for r in required:
+        if r in adv_set:
+            out.append({"required": r, "matched": r, "basis": "exact", "hops": 0})
+            continue
+        fam = _family_of(r)
+        near = sorted(a for a in adv if fam is not None and _family_of(a) == fam)
+        if near:
+            out.append({"required": r, "matched": near[0], "basis": "family", "hops": 1})
+        else:
+            out.append({"required": r, "matched": None, "basis": None, "hops": None})
+    return out
+
+
 def activates_on(crystal: Dict[str, Any], prism_capabilities: List[str]) -> bool:
-    """The bidirectional prism junction, as one subset check: every capability any organon
-    requires must be NAMED in the prism's advertised set. Grounding-in and actuating-out are the
-    same gate — actuator.* / sensor.* capabilities are names like any other."""
-    return set(required_capabilities(crystal)) <= set(prism_capabilities or [])
+    """The bidirectional prism junction. Grounding-in and actuating-out are the same question.
+
+    Answered by MEASURING reach (`capability_reach`) rather than by a subset test — the gate itself
+    still requires every requirement to be met EXACTLY, so this is not a behaviour change; what it
+    buys is that the near-miss is now measurable and reportable instead of collapsing to a bare
+    False. See `capability_reach` for the flagged seam on whether 1-hop family nearness should ever
+    satisfy (it must not, until discharge is grant-authorized — `NEXT.md §Q`).
+    """
+    return all(m["basis"] == "exact"
+               for m in capability_reach(required_capabilities(crystal), prism_capabilities))
 
 
 def crystal_artifact(crystal: Dict[str, Any]) -> Dict[str, Any]:
@@ -162,5 +263,5 @@ def verify(artifact: Dict[str, Any]) -> Dict[str, Any]:
 __all__ = [
     "CRYSTAL_CONTENT_TYPE", "FACET_DIRECTIONS",
     "canonical_json", "crystal_sha", "validate",
-    "required_capabilities", "activates_on", "crystal_artifact", "verify",
+    "required_capabilities", "activates_on", "capability_reach", "crystal_artifact", "verify",
 ]

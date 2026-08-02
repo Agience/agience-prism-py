@@ -82,6 +82,34 @@ def test_init_generates_identity_and_manifest(keys_dir):
     assert m["capabilities"] == ["compute.local", "store.read"]
 
 
+def test_init_refuses_an_unknown_capability_kind(keys_dir, capsys):
+    """The manifest is an ADVERTISEMENT the host signs, so a typo here is advertised to the platform
+    and only rejected later at validation — which is exactly how prism-c shipped `storage`/`webgpu`
+    unnoticed. `webgpu` is that real historical typo for `compute.gpu`."""
+    rc = cli.main(["init", "--keys-dir", str(keys_dir), "--capabilities", "compute.local,webgpu"])
+    assert rc == cli.EXIT_ERROR
+    assert "webgpu" in capsys.readouterr().out
+
+
+def test_init_rejects_before_generating_an_identity(keys_dir):
+    """Refusing AFTER writing the keypair would strand an identity, and the corrected retry would
+    then fail with 'already exists' — so the validation must come first."""
+    assert cli.main(["init", "--keys-dir", str(keys_dir), "--capabilities", "bogus"]) == cli.EXIT_ERROR
+    assert not (keys_dir / "host.private.pem").exists()
+    assert not (keys_dir / cli.MANIFEST_NAME).exists()
+    # and the corrected invocation still works
+    _init(keys_dir)
+    assert (keys_dir / "host.private.pem").is_file()
+
+
+def test_init_accepts_an_open_family_member(keys_dir):
+    """Plug-and-play: a host advertises real hardware without a vocabulary release."""
+    assert cli.main(["init", "--keys-dir", str(keys_dir),
+                     "--capabilities", "compute.local,sensor.temperature"]) == cli.EXIT_OK
+    m = json.loads((keys_dir / cli.MANIFEST_NAME).read_text())
+    assert m["capabilities"] == ["compute.local", "sensor.temperature"]
+
+
 def test_init_refuses_to_clobber_an_identity(keys_dir):
     _init(keys_dir)
     before = (keys_dir / "host.private.pem").read_bytes()

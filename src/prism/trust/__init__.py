@@ -12,7 +12,7 @@ never the reverse.
 Deliberately NOT a dependency of Mantle — the database verifies tokens via a thin
 issuer+JWKS seam and never signs, so it stays application-agnostic.
 """
-from . import authority_trust, key_manager, service_identity
+from . import authority_trust, key_manager, opsign, service_identity
 from .authority_trust import (
     get_authority_manifest,
     verify_delegation_jwt,
@@ -29,7 +29,7 @@ from .service_identity import (
 )
 
 __all__ = [
-    "authority_trust", "key_manager", "service_identity",
+    "authority_trust", "key_manager", "opsign", "service_identity",
     "verify_jwt", "verify_delegation_jwt", "get_authority_manifest",
     "init_service_identity", "get_service_identity", "ServiceIdentity",
     "sign_service_jwt", "sign_delegation_jwt", "get_host_id", "SERVICE_NAMES",
