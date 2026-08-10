@@ -2,35 +2,33 @@
 
 The install story (OPERATOR-ARCHITECTURE §12.3), client-side: a prism initializes an
 identity + capability manifest, discovers bundles/crystals it can actually ground (the
-self-filtering catalog), installs a bundle by VERIFYING it (the same semantics as the
+self-filtering catalog), installs a bundle by verifying it (the same semantics as the
 op.install organon, run client-side through ``prism.crystal_model`` — Apache verifying
 Apache, no AGPL import), and publishes locally-authored crystal/bundle artifacts.
 
-What each command honestly does (and the seams, flagged):
+The command surface:
 
-  init      prism-py has NO key-generation machinery of its own — platform services get
-            keys from the init container and ``prism.trust`` only LOADS them. So init
-            GENERATES here, following the trust floor's file conventions: an RSA-2048
-            keypair (``host.private.pem`` / ``host.public.pem`` in KEYS_DIR, the
-            ``{name}.private.pem`` pattern) and a capability manifest
-            (``prism.manifest.json``). Default capabilities: ``compute.local`` — the one
-            capability running local Python physically demonstrates; everything else must
-            be declared with ``--capabilities`` (a manifest is an ADVERTISEMENT the host
-            must be able to honor, so nothing is auto-claimed).
+  init      generate this prism's identity, following the trust floor's file conventions:
+            an RSA-2048 keypair (``host.private.pem`` / ``host.public.pem`` in KEYS_DIR,
+            the ``{name}.private.pem`` pattern) and a capability manifest
+            (``prism.manifest.json``). Generation happens here because platform services
+            get their keys from the init container and ``prism.trust`` only loads them.
+            Default capabilities: ``compute.local`` — the one capability running local
+            Python physically demonstrates; everything else is declared with
+            ``--capabilities``, because a manifest is an advertisement the host must be
+            able to honor.
   list      GET Mantle's discovery surface (``/artifacts/visible?content_type=…``) for
-            bundle + crystal artifacts and filter by ``activates_on`` against THIS host's
+            bundle + crystal artifacts and filter by ``activates_on`` against this host's
             manifest capabilities — the self-filtering catalog. ``--all`` shows
             non-activating entries too, with the capability gap named per row.
   install   fetch the bundle artifact, verify the bundle sha, then member-by-member:
-            fetch each crystal, ``prism.crystal_model.verify`` (refuse tampering), check
-            the bundle's sha PIN, gate on ``activates_on`` (gap named). install.kind
-            "artifact" grounds LOCALLY: the verified descriptor + crystal artifacts are
-            recorded under ``KEYS_DIR/installed/<bundle>.json`` (the prism's own install
-            registry — platform-side grounding stays with the op.install organon).
-            pip/npm/cmake/compose are TYPED REFUSALS — "install kind X requires host
-            policy" — executing package managers from a CLI verification path without a
-            policy gate would be an unflagged security hole; the refusal IS the honest
-            state, flagged for the host-policy brick.
+            fetch each crystal, ``prism.crystal_model.verify`` it, check the bundle's sha
+            pin, gate on ``activates_on`` (gap named). install.kind "artifact" grounds
+            locally: the verified descriptor + crystal artifacts are recorded under
+            ``KEYS_DIR/installed/<bundle>.json`` (the prism's own install registry —
+            platform-side grounding stays with the op.install organon). install.kind
+            pip/npm/cmake/compose exits 3: running a package manager from a verification
+            path needs a host policy gate, and this client holds no policy.
   publish   build an artifact from a local JSON definition — a crystal definition
             (validated + sha-stamped via ``prism.crystal_model.crystal_artifact``) or a
             bundle ({"manifest": …, "content": …}, sha stamped over the canonical
@@ -99,8 +97,8 @@ def _http_post(url: str, body: Dict[str, Any], token: Optional[str] = None) -> A
 # ── shared helpers ───────────────────────────────────────────────────────────
 
 def _keys_dir(arg: Optional[str]) -> Path:
-    """--keys-dir, else the canonical KEYS_DIR (prism.config). No invented default:
-    an identity location must be the caller's decision."""
+    """--keys-dir, else the canonical KEYS_DIR (prism.config). There is no built-in
+    default — an identity location is the caller's decision."""
     kd = arg or config.keys_dir()
     if not kd:
         raise SystemExit("prism: no keys directory — pass --keys-dir or set KEYS_DIR "
@@ -122,7 +120,7 @@ def _capabilities(keys_dir: Path) -> Optional[List[str]]:
 
 def _canonical_payload(content: Any) -> bytes:
     """bundle_manifest's canonical-payload semantics (str = UTF-8 bytes; dict/list =
-    sorted-keys no-whitespace JSON) — the sha over these bytes IS the bundle ref."""
+    sorted-keys no-whitespace JSON) — the sha over these bytes is the bundle ref."""
     if isinstance(content, (bytes, bytearray)):
         return bytes(content)
     if isinstance(content, str):
@@ -141,7 +139,7 @@ def _context_of(artifact: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _verify_bundle_sha(artifact: Dict[str, Any]) -> Dict[str, Any]:
-    """The bundle integrity gate — refuse-before-grounding, like op.install."""
+    """The bundle integrity gate: the sha is checked before anything grounds, like op.install."""
     manifest = _context_of(artifact)
     claimed = manifest.get("sha256")
     content = artifact.get("content", "")
@@ -171,10 +169,10 @@ def cmd_init(args: argparse.Namespace) -> int:
     pub_path = keys_dir / "host.public.pem"
     manifest_path = keys_dir / MANIFEST_NAME
 
-    # Validate BEFORE generating a keypair: failing afterwards would leave an identity behind and
-    # the retry would then refuse as "already exists". The manifest is an ADVERTISEMENT the host
-    # signs — an unknown kind here is advertised to the platform and rejected at validation, which
-    # is how prism-c's `storage`/`webgpu` went unnoticed. Refuse the typo at the source.
+    # Validate before generating a keypair, so a rejected capability list leaves no identity behind
+    # for the retry to trip over. The manifest is an advertisement the host signs, and an unknown
+    # kind here would travel to the platform and be rejected there; catching the typo at the source
+    # keeps the error next to the input that caused it.
     caps = sorted({c.strip() for c in (args.capabilities or "compute.local").split(",")
                    if c.strip()})
     unknown = [c for c in caps if not is_known_capability(c)]
@@ -185,7 +183,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         return EXIT_ERROR
 
     if priv_path.exists() and not args.force:
-        # never clobber an identity — a regenerated key is a DIFFERENT prism.
+        # an existing identity stands — a regenerated key is a different prism.
         print("prism init: identity already exists at %s (use --force to regenerate — "
               "a new key is a NEW prism identity)" % priv_path)
         return EXIT_ERROR
@@ -212,7 +210,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 # ── list ─────────────────────────────────────────────────────────────────────
 
 def _requires_of(artifact: Dict[str, Any]) -> List[str]:
-    """The capability requirements an artifact advertises. Crystal context carries
+    """The capability requirements an artifact advertises. A crystal's context carries
     `requires` (crystal_artifact writes it); a bundle manifest carries
     `requires.capabilities` (bundle_manifest shape)."""
     ctx = _context_of(artifact)
@@ -286,7 +284,6 @@ def cmd_install(args: argparse.Namespace) -> int:
     inst = manifest.get("install") or {}
     kind = inst.get("kind") if isinstance(inst, dict) else None
     if kind in POLICY_GATED_KINDS:
-        # ⛔ the typed policy refusal — see the module docstring. Never a shell-out.
         print("prism install: REFUSED — install kind %s requires host policy "
               "(seam: host-policy-gate)" % kind)
         return EXIT_POLICY
@@ -311,7 +308,7 @@ def cmd_install(args: argparse.Namespace) -> int:
             print("prism install: crystal %s not found" % name)
             return EXIT_ERROR
         try:
-            crystal = verify(cart)                       # 2. refuses tampering, loudly
+            crystal = verify(cart)                       # 2. a tampered crystal does not verify
         except ValueError as e:
             print("prism install: %s" % e)
             return EXIT_ERROR
@@ -327,7 +324,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         grounded.append({"name": name, "sha256": pin,
                          "requires": required_capabilities(crystal), "artifact": cart})
 
-    # 4. ground LOCALLY: the prism's own install registry (KEYS_DIR/installed/). The
+    # 4. ground locally: the prism's own install registry (KEYS_DIR/installed/). The
     # platform-side registry mutation belongs to the op.install organon, not this client.
     rec_dir = keys_dir / "installed"
     rec_dir.mkdir(parents=True, exist_ok=True)
@@ -359,15 +356,16 @@ def cmd_publish(args: argparse.Namespace) -> int:
     definition = json.loads(path.read_text(encoding="utf-8"))
 
     if isinstance(definition, dict) and "facets" in definition:
-        # a CRYSTAL definition — validated + sha-stamped by the contract itself.
+        # a crystal definition — validated + sha-stamped by the contract itself.
         try:
             artifact = crystal_artifact(definition)
         except ValueError as e:
             print("prism publish: %s" % e)
             return EXIT_ERROR
     elif isinstance(definition, dict) and "manifest" in definition:
-        # a BUNDLE: {"name", "manifest": {...}, "content": ...} — sha stamped over the
-        # canonical payload (bundle_manifest semantics), never trusted from the file.
+        # a bundle: {"name", "manifest": {...}, "content": ...} — sha stamped over the
+        # canonical payload (bundle_manifest semantics), computed here rather than read
+        # from the file.
         manifest = dict(definition["manifest"])
         content = definition.get("content", "")
         manifest["sha256"] = _sha256_of(content)
@@ -432,7 +430,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return args.fn(args)
     except SystemExit:
         raise
-    except Exception as e:                               # honest surface, no traceback spam
+    except Exception as e:                               # one-line surface, no traceback spam
         print("prism %s: %s: %s" % (args.command, type(e).__name__, e))
         return EXIT_ERROR
 

@@ -1,5 +1,4 @@
 """Server auth: delegation-token forwarding + user-id decode + API-key fallback.
-
 Pure unit tests — no network, no mcp/httpx needed."""
 
 import base64

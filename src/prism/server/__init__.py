@@ -1,10 +1,16 @@
-"""agience-prism-py — SDK for building MCP servers that integrate with Agience.
+"""The MCP server surface — SDK for building MCP servers that integrate with Agience.
 
-Apache-2.0, and permissive **on purpose**: `agience-beam` is AGPL-3.0, but the
-integration boundary is permissive so any server — first-party persona, premium
-add-on (e.g. Beacon), or third-party — can build on it without copyleft reaching
-their code. This package contains only integration glue (auth delegation, a core
-HTTP client, a server scaffold); **no platform IP**.
+Installed with `pip install "agience-prism-py[server]"`.
+
+Apache-2.0, and permissive on purpose: the AGPL components are the platform (ember,
+origin, chorus), and the integration boundary is permissive so any server — first-party
+persona, premium add-on, or third-party — can build on it without copyleft reaching
+their code. This package holds only integration glue: auth delegation, a core HTTP
+client, a server scaffold. No platform IP.
+
+The licence rule holds by topology rather than by anyone remembering it: AGPL
+components are sinks, so nothing imports them. Everything imports prism, which is why
+prism is not one of them.
 
 Quickstart::
 

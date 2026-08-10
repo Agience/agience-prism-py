@@ -18,9 +18,9 @@ A host authorizes inbound calls with, in precedence order:
      (constant-time compare). Cross-authority / shared-host path.
 
 Verifying keys come from a mounted authority-manifest file and/or a JWKS URL
-(e.g. Origin's ``/.well-known/jwks.json``). **No platform code is imported** —
-the manifest is plain public JSON and tokens are verified with PyJWT. If no
-source is configured the host is *open* (matches the historical default).
+(e.g. Origin's ``/.well-known/jwks.json``). No platform code is imported: the
+manifest is plain public JSON and tokens are verified with PyJWT. A host with no
+source configured is open, so configuring one is what closes it.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ import time
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
-from ..errors import AuthError  # re-exported here for back-compat (§10)
+from ..errors import AuthError  # re-exported here: callers catch it from this module
 
 log = logging.getLogger("agience.host.auth")
 
@@ -64,8 +64,8 @@ class TokenVerifier:
         leeway: int = 60,
     ) -> None:
         self.api_keys = tuple(k for k in (api_keys or ()) if k)
-        # Directory of key files (one key per non-blank, non-`#` line; usually one
-        # file per consumer). Lives on a persistent volume, NOT in git/secrets;
+        # Directory of key files (one key per non-blank, non-`#` line; one file per
+        # consumer). Lives on a persistent volume, not in git/secrets;
         # add or remove a file to grant/revoke and it is picked up live (no
         # redeploy) within api_keys_dir_refresh_s. The filename is the label.
         self.api_keys_dir = (api_keys_dir or "").strip() or None
@@ -132,11 +132,11 @@ class TokenVerifier:
 
     @property
     def enabled(self) -> bool:
-        """True when at least one credential is configured (else: open).
+        """True when at least one credential is configured; a host with none is open.
 
-        A configured-but-empty key directory does NOT enforce on its own — with
-        no inline keys and no JWT source the host stays open until a key file is
-        added. Matches the historical "no auth configured = open" default.
+        Enforcement follows the keys, not the directory: a configured-but-empty
+        key directory leaves the host open until a key file is added, because
+        with no inline keys and no JWT source there is nothing to check against.
         """
         return bool(self._all_api_keys()) or self.jwt_enabled
 
@@ -267,15 +267,6 @@ class TokenVerifier:
 
     def _match_api_key(self, presented: str) -> bool:
         """Constant-time compare against every configured key.
-
-        ⛔ COMPARED AS `str`, WHICH RAISES ON NON-ASCII AND 500s BEFORE AUTH.
-        `secrets.compare_digest` on two `str` raises
-        `TypeError: comparing strings with non-ASCII characters is not supported`, and
-        `_auth_dep` catches only `AuthError` — so a raw header like
-        `Authorization: Bearer k\\xe9y` (Starlette decodes headers latin-1) propagated out of the
-        ASGI app as a **500 with a full traceback, from an unauthenticated caller, on the
-        pre-auth path**. Not a bypass — a 500 still denies — but a remotely-triggerable unhandled
-        exception reachable before authentication, and it leaks a stack trace.
         Encoding both sides to bytes keeps the comparison constant-time and total."""
         try:
             presented_b = presented.encode("utf-8", "surrogatepass")

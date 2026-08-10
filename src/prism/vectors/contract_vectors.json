@@ -1,0 +1,802 @@
+{
+ "_comment": "Shared cross-SDK conformance vectors for the PRISM contract. RFC 8785 (JCS) pins THREE things and every SDK must agree on all three: (1) strings raw UTF-8, never backslash-u escaped; (2) numbers rendered per ECMAScript Number::toString (1.0 -> 1, -0.0 -> 0, fixed/exponential switch at 1e21 / 1e-7); (3) object keys sorted by UTF-16 CODE UNITS, not code points. Pinned 2026-07-29 after all three were MEASURED diverging between prism-py and prism-js. The num_* and key_sort_astral cases are exactly what a string-escaping-only fix leaves broken.",
+ "canonical_json": [
+  {
+   "name": "ascii_flat",
+   "value": {
+    "b": 2,
+    "a": "plain"
+   },
+   "canonical": "{\"a\":\"plain\",\"b\":2}",
+   "sha256": "690599236df5cdd2291cc066ce26b71676ef1070f3fc9515490eab38b09b922e"
+  },
+  {
+   "name": "key_sort_nested",
+   "value": {
+    "z": 1,
+    "a": {
+     "d": 4,
+     "c": 3
+    }
+   },
+   "canonical": "{\"a\":{\"c\":3,\"d\":4},\"z\":1}",
+   "sha256": "9609398a798ffd5d25bf2ad53bb05d312094237c7c818dd99951e600396fcc64"
+  },
+  {
+   "name": "array_order_kept",
+   "value": {
+    "f": [
+     "b",
+     "a",
+     "c"
+    ]
+   },
+   "canonical": "{\"f\":[\"b\",\"a\",\"c\"]}",
+   "sha256": "9d903e95504bd409a83b4941fa9174a7a853d3398f4960051c84e579be6164f0"
+  },
+  {
+   "name": "empty_containers",
+   "value": {
+    "o": {},
+    "l": []
+   },
+   "canonical": "{\"l\":[],\"o\":{}}",
+   "sha256": "111c683c055d4f0a50ce55366e2dfc66644f79266248039a271dd7e25cd5b104"
+  },
+  {
+   "name": "non_ascii_latin",
+   "value": {
+    "name": "capteur-température"
+   },
+   "canonical": "{\"name\":\"capteur-température\"}",
+   "sha256": "54500d798af885453a50ea68a64ef8dd00d32f1b2f8e9e492510f68606a2c570"
+  },
+  {
+   "name": "non_ascii_cjk",
+   "value": {
+    "name": "温度センサ"
+   },
+   "canonical": "{\"name\":\"温度センサ\"}",
+   "sha256": "36713b8bffa898fd6ed5a9859ac4831282c0fd1aa4978aeeeab226155f13e16e"
+  },
+  {
+   "name": "astral_emoji",
+   "value": {
+    "k": "café 😀"
+   },
+   "canonical": "{\"k\":\"café 😀\"}",
+   "sha256": "1819d8e2f35e2ef147838c5a793d24b951350a6c9041cec191d071a355060aab"
+  },
+  {
+   "name": "control_and_quote",
+   "value": {
+    "tab": "a\tb\"c\\d",
+    "nl": "x\ny"
+   },
+   "canonical": "{\"nl\":\"x\\ny\",\"tab\":\"a\\tb\\\"c\\\\d\"}",
+   "sha256": "bdb3de039da2e408d16118971a617cdf91a8731ba51a0b634e9240519a753a2b"
+  },
+  {
+   "name": "mixed_types",
+   "value": {
+    "a": [
+     "x",
+     true,
+     null,
+     7
+    ],
+    "n": 1.5
+   },
+   "canonical": "{\"a\":[\"x\",true,null,7],\"n\":1.5}",
+   "sha256": "2fa95a3212b2fcb8af0a0688be6d46b839e54931e3ae323cc68384da3f0e97d1"
+  },
+  {
+   "name": "num_integral_float",
+   "value": {
+    "a": 1.0
+   },
+   "canonical": "{\"a\":1}",
+   "sha256": "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862"
+  },
+  {
+   "name": "num_negative_zero",
+   "value": {
+    "a": -0.0
+   },
+   "canonical": "{\"a\":0}",
+   "sha256": "45b619e97b5d9b029af4522e9ffb02fa99ff2bf226c82ee22a7cc10269a557e8"
+  },
+  {
+   "name": "num_boundary_1e20",
+   "value": {
+    "a": 1e+20
+   },
+   "canonical": "{\"a\":100000000000000000000}",
+   "sha256": "c125828e7797f96ed628b16510a00360bfb7ea19ea08f003b43c9668f195f087"
+  },
+  {
+   "name": "num_boundary_1e21",
+   "value": {
+    "a": 1e+21
+   },
+   "canonical": "{\"a\":1e+21}",
+   "sha256": "a18fbc0bcef4f91fedea4a6ff70089101462846a93a65795324a14b10cb5c4d9"
+  },
+  {
+   "name": "num_tiny_1e_minus_6",
+   "value": {
+    "a": 1e-06
+   },
+   "canonical": "{\"a\":0.000001}",
+   "sha256": "73316665f7916cb06cb29b316b8987b6cc89a7fea4a4fff0ce661eb6ad1eeffb"
+  },
+  {
+   "name": "num_tiny_1e_minus_7",
+   "value": {
+    "a": 1e-07
+   },
+   "canonical": "{\"a\":1e-7}",
+   "sha256": "b248271d18d09a840564eafaaeb935f11a4d44d6d90ac5b3baa9714420782816"
+  },
+  {
+   "name": "key_sort_astral",
+   "value": {
+    "😀": 1,
+    "�": 2,
+    "z": 3
+   },
+   "canonical": "{\"z\":3,\"😀\":1,\"�\":2}",
+   "sha256": "cb66fca59dfaf029590e41ffb3364f28cf21676bc4c8428bac16df027ba9eecf"
+  }
+ ],
+ "crystal_sha": [
+  {
+   "name": "crystal_ascii",
+   "crystal": {
+    "name": "crystal.fetcher",
+    "organons": [
+     {
+      "name": "op.fetch.get",
+      "requires": [
+       "net.get"
+      ]
+     }
+    ]
+   },
+   "sha256": "111caa7e4ad51f9a0cdb896f064690ceb12d5f2387fcb52de2916a8586f5e534"
+  },
+  {
+   "name": "crystal_non_ascii",
+   "crystal": {
+    "name": "crystal.capteur-température",
+    "organons": [
+     {
+      "name": "op.sense",
+      "requires": [
+       "sensor.capture"
+      ]
+     }
+    ]
+   },
+   "sha256": "03c41a576d03c20ae8d0ec05a479842ef61784ca05c253c4ff6293f4e680f568"
+  }
+ ],
+ "_structural_comment": "Deterministic CBOR (RFC 8949 4.2) content addresses — 'structural permanence'. Every SDK must reproduce `cbor_hex` byte-for-byte and `sha256` exactly. A {\"$bigint\": \"...\"} value must be reconstituted natively (Python int / JS BigInt) BEFORE encoding: JSON cannot carry an integer beyond 2^53, and JS JSON.parse would silently round it — which is precisely the defect structural encoding removes. Under JCS that same value COLLIDES with 9007199254740992. | 2026-07-29 (Contract Builder): added the 64-bit/bignum handover boundary (s_u64_max, s_bignum_pos, s_i64_floor, s_bignum_neg, s_bignum_wide). Before this, integers >= 2^64 raised in Python and were SILENTLY TRUNCATED to 64 bits in JS, so the two SDKs computed different addresses for the same integer with neither raising. Major type 0/1 is REQUIRED whenever the value fits in 64 bits and a bignum only beyond, or one integer would have two encodings.",
+ "structural_algo": "cbor-det-sha256",
+ "structural": [
+  {
+   "name": "s_ascii",
+   "value": {
+    "b": 2,
+    "a": "plain"
+   },
+   "cbor_hex": "a2616165706c61696e616202",
+   "sha256": "94b0285aa4b7f4786d15b42eaee335be20b03dbf5f1bcbcb82886adf81ee9095"
+  },
+  {
+   "name": "s_non_ascii",
+   "value": {
+    "name": "capteur-température"
+   },
+   "cbor_hex": "a1646e616d6574636170746575722d74656d70c3a9726174757265",
+   "sha256": "5245f8d509cda206cb3b2ad1c8e625aa78bc0a065f111ab07e67993de9c33333"
+  },
+  {
+   "name": "s_cjk",
+   "value": {
+    "name": "温度センサ"
+   },
+   "cbor_hex": "a1646e616d656fe6b8a9e5baa6e382bbe383b3e382b5",
+   "sha256": "07d23336923d092d2d58ab5ad2ae7e13e8065f657bfa1189f2992484eaf52229"
+  },
+  {
+   "name": "s_astral_key",
+   "value": {
+    "😀": 1,
+    "�": 2,
+    "z": 3
+   },
+   "cbor_hex": "a3617a0363efbfbd0264f09f988001",
+   "sha256": "2f91592820463acba7b0ec2599d094e5f64baa3809643b61ee988edea220de49"
+  },
+  {
+   "name": "s_numbers",
+   "value": {
+    "i": 7,
+    "f": 1.5,
+    "neg": -3,
+    "zero": 0,
+    "intfloat": 1.0
+   },
+   "cbor_hex": "a56166fb3ff8000000000000616907636e656722647a65726f0068696e74666c6f617401",
+   "sha256": "60b4de3892e5b8c933a4e3626b22d729fa55f6c1b7246c7f724d2ba8410d234e"
+  },
+  {
+   "name": "s_nested",
+   "value": {
+    "z": 1,
+    "a": {
+     "d": 4,
+     "c": 3
+    }
+   },
+   "cbor_hex": "a26161a2616303616404617a01",
+   "sha256": "0ee1c1d1a9b2e001fe27fd09ffac142a2fdd661a40eb7d81516ead6dc4873796"
+  },
+  {
+   "name": "s_array",
+   "value": {
+    "f": [
+     "b",
+     "a",
+     null,
+     true
+    ]
+   },
+   "cbor_hex": "a161668461626161f6f5",
+   "sha256": "ad002e1b9b8424d5a8a19d53579d413d37418d2fcfc946b6f50c9cc3d3005fd6"
+  },
+  {
+   "name": "s_empty",
+   "value": {
+    "o": {},
+    "l": []
+   },
+   "cbor_hex": "a2616c80616fa0",
+   "sha256": "daa92c70946ce1dd5e52c6901935da6c4dfc443cdb0cebdf61acac37bc900311"
+  },
+  {
+   "name": "s_head_boundaries",
+   "value": {
+    "a": 23,
+    "b": 24,
+    "c": 256,
+    "d": 65536
+   },
+   "cbor_hex": "a461611761621818616319010061641a00010000",
+   "sha256": "71ed5bc1bd17c08f5f2aa6bdaac8d0f6b96b0f0795bc0bb6f2fd66d367f0f4c1"
+  },
+  {
+   "name": "s_bigint",
+   "value": {
+    "a": {
+     "$bigint": "9007199254740993"
+    }
+   },
+   "cbor_hex": "a161611b0020000000000001",
+   "sha256": "3ba5187680247a5ca8308f9037574e26e034af6121aea7037f6ead71ec210afc"
+  },
+  {
+   "name": "s_u64_max",
+   "_why": "largest value that MUST still use major type 0",
+   "value": {
+    "a": {
+     "$bigint": "18446744073709551615"
+    }
+   },
+   "cbor_hex": "a161611bffffffffffffffff",
+   "sha256": "a63e6397d37439adf883da9b6925f8d3582b5a84b4796a0fa8d533d98335a403"
+  },
+  {
+   "name": "s_bignum_pos",
+   "_why": "first value that MUST become a tag-2 bignum",
+   "value": {
+    "a": {
+     "$bigint": "18446744073709551616"
+    }
+   },
+   "cbor_hex": "a16161c249010000000000000000",
+   "sha256": "eade02d4036b08c3de097f7cb9e3cb9796bcc3fb0f8af8b1b0014333f2f32163"
+  },
+  {
+   "name": "s_i64_floor",
+   "_why": "most negative value that MUST still use major type 1",
+   "value": {
+    "a": {
+     "$bigint": "-18446744073709551616"
+    }
+   },
+   "cbor_hex": "a161613bffffffffffffffff",
+   "sha256": "004da7e606524aecf4902bc9eca21498da51a42399969b1b6c33dff3274214be"
+  },
+  {
+   "name": "s_bignum_neg",
+   "_why": "first value that MUST become a tag-3 bignum",
+   "value": {
+    "a": {
+     "$bigint": "-18446744073709551617"
+    }
+   },
+   "cbor_hex": "a16161c349010000000000000000",
+   "sha256": "29fe4cb84a8c9ebc0ea5967c14ae0a7893be4236ba6f079e0c42a6dddc2b07cd"
+  },
+  {
+   "name": "s_bignum_wide",
+   "_why": "a magnitude spanning many bytes, no leading zeros",
+   "value": {
+    "a": {
+     "$bigint": "340282366920938463463374607431768211463"
+    }
+   },
+   "cbor_hex": "a16161c2510100000000000000000000000000000007",
+   "sha256": "20978bfc5ac14521ecc77a9a40517b5efb49b3eadc6def6bfe39d4836bf6f003"
+  }
+ ],
+ "_junction_comment": "THE JUNCTION vectors (added 2026-07-29, Contract Builder — NEXT.md §5.3). capability_drift.py compares capability NAMES only and 'would not have caught a single item in §5.1'. It did not: cross-checking these four functions between prism-py and prism-js found TWO live divergences in the code that decides whether a host grounds a crystal at all. (1) prism-js required only `name`, so a TS host GROUNDED crystals Python REFUSES — measured 3 problems in py vs 0 in js on the same crystal. (2) prism-py had NO capability-spelling check on organon `requires`, so PYTHON — the canonical implementation and the side that SIGNS crystals — validated a requirement no platform will honour, the exact failure prism-js's own comment describes as 'how prism-c shipped webgpu'. Each SDK held half the validation. Both fixed; problem MESSAGES are now byte-identical, which is why they are pinned verbatim rather than by count.",
+ "capability_reach": [
+  {
+   "name": "exact_hit",
+   "required": [
+    "net.get"
+   ],
+   "advertised": [
+    "net.get",
+    "fs.read"
+   ],
+   "matches": [
+    {
+     "required": "net.get",
+     "matched": "net.get",
+     "basis": "exact",
+     "hops": 0
+    }
+   ]
+  },
+  {
+   "name": "unreachable",
+   "required": [
+    "compute.gpu"
+   ],
+   "advertised": [
+    "fs.read"
+   ],
+   "matches": [
+    {
+     "required": "compute.gpu",
+     "matched": null,
+     "basis": null,
+     "hops": null
+    }
+   ]
+  },
+  {
+   "name": "family_single",
+   "required": [
+    "sensor.temperature"
+   ],
+   "advertised": [
+    "sensor.capture"
+   ],
+   "matches": [
+    {
+     "required": "sensor.temperature",
+     "matched": "sensor.capture",
+     "basis": "family",
+     "hops": 1
+    }
+   ]
+  },
+  {
+   "name": "family_multi",
+   "required": [
+    "sensor.temperature"
+   ],
+   "advertised": [
+    "sensor.zeta",
+    "sensor.alpha",
+    "sensor.capture"
+   ],
+   "matches": [
+    {
+     "required": "sensor.temperature",
+     "matched": "sensor.alpha",
+     "basis": "family",
+     "hops": 1
+    }
+   ]
+  },
+  {
+   "name": "actuator_family",
+   "required": [
+    "actuator.valve"
+   ],
+   "advertised": [
+    "actuator.control",
+    "net.get"
+   ],
+   "matches": [
+    {
+     "required": "actuator.valve",
+     "matched": "actuator.control",
+     "basis": "family",
+     "hops": 1
+    }
+   ]
+  },
+  {
+   "name": "mixed",
+   "required": [
+    "net.get",
+    "sensor.x"
+   ],
+   "advertised": [
+    "net.get",
+    "sensor.capture"
+   ],
+   "matches": [
+    {
+     "required": "net.get",
+     "matched": "net.get",
+     "basis": "exact",
+     "hops": 0
+    },
+    {
+     "required": "sensor.x",
+     "matched": "sensor.capture",
+     "basis": "family",
+     "hops": 1
+    }
+   ]
+  },
+  {
+   "name": "empty_required",
+   "required": [],
+   "advertised": [
+    "net.get"
+   ],
+   "matches": []
+  },
+  {
+   "name": "empty_advertised",
+   "required": [
+    "net.get"
+   ],
+   "advertised": [],
+   "matches": [
+    {
+     "required": "net.get",
+     "matched": null,
+     "basis": null,
+     "hops": null
+    }
+   ]
+  }
+ ],
+ "activates_on": [
+  {
+   "name": "exact_hit",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "net.get"
+      ]
+     }
+    ]
+   },
+   "advertised": [
+    "net.get",
+    "fs.read"
+   ],
+   "activates": true
+  },
+  {
+   "name": "unreachable",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "compute.gpu"
+      ]
+     }
+    ]
+   },
+   "advertised": [
+    "fs.read"
+   ],
+   "activates": false
+  },
+  {
+   "name": "family_single",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "sensor.temperature"
+      ]
+     }
+    ]
+   },
+   "advertised": [
+    "sensor.capture"
+   ],
+   "activates": false
+  },
+  {
+   "name": "family_multi",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "sensor.temperature"
+      ]
+     }
+    ]
+   },
+   "advertised": [
+    "sensor.zeta",
+    "sensor.alpha",
+    "sensor.capture"
+   ],
+   "activates": false
+  },
+  {
+   "name": "actuator_family",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "actuator.valve"
+      ]
+     }
+    ]
+   },
+   "advertised": [
+    "actuator.control",
+    "net.get"
+   ],
+   "activates": false
+  },
+  {
+   "name": "mixed",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "net.get",
+       "sensor.x"
+      ]
+     }
+    ]
+   },
+   "advertised": [
+    "net.get",
+    "sensor.capture"
+   ],
+   "activates": false
+  },
+  {
+   "name": "empty_required",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": []
+     }
+    ]
+   },
+   "advertised": [
+    "net.get"
+   ],
+   "activates": true
+  },
+  {
+   "name": "empty_advertised",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "net.get"
+      ]
+     }
+    ]
+   },
+   "advertised": [],
+   "activates": false
+  }
+ ],
+ "required_capabilities": [
+  {
+   "name": "single",
+   "crystal": {
+    "schema_version": 1,
+    "name": "single",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "net.get"
+      ]
+     }
+    ]
+   },
+   "required": [
+    "net.get"
+   ]
+  },
+  {
+   "name": "dedup_union",
+   "crystal": {
+    "schema_version": 1,
+    "name": "dedup_union",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "net.get",
+       "net.get",
+       "fs.read"
+      ]
+     }
+    ]
+   },
+   "required": [
+    "fs.read",
+    "net.get"
+   ]
+  },
+  {
+   "name": "none",
+   "crystal": {
+    "schema_version": 1,
+    "name": "none",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": []
+     }
+    ]
+   },
+   "required": []
+  }
+ ],
+ "validate": [
+  {
+   "name": "missing_required",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "net.get"
+      ]
+     }
+    ]
+   },
+   "problems": [
+    "missing required field: facets",
+    "missing required field: tektons",
+    "missing required field: created_by"
+   ]
+  },
+  {
+   "name": "unknown_kind",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "totally.bogus"
+      ]
+     }
+    ]
+   },
+   "problems": [
+    "missing required field: facets",
+    "missing required field: tektons",
+    "missing required field: created_by",
+    "organon op.a: unknown capability kind totally.bogus"
+   ]
+  },
+  {
+   "name": "open_family_ok",
+   "crystal": {
+    "schema_version": 1,
+    "name": "c1",
+    "kind": "crystal",
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "sensor.temperature"
+      ]
+     }
+    ]
+   },
+   "problems": [
+    "missing required field: facets",
+    "missing required field: tektons",
+    "missing required field: created_by"
+   ]
+  },
+  {
+   "name": "fully_valid",
+   "crystal": {
+    "schema_version": 1,
+    "name": "full",
+    "kind": "crystal",
+    "created_by": "john",
+    "facets": [
+     {
+      "name": "f1",
+      "direction": "out"
+     }
+    ],
+    "tektons": [
+     {
+      "name": "t1"
+     }
+    ],
+    "organons": [
+     {
+      "name": "op.a",
+      "requires": [
+       "net.get"
+      ]
+     }
+    ]
+   },
+   "problems": []
+  }
+ ]
+}

@@ -1,46 +1,31 @@
-"""Grounding — the small, stable surface a RUNNER and the migrating personas reach.
+"""Grounding — the small, stable surface a runner and the migrating personas reach.
 
-Hoisted from the 3069-line `genesis.py` op-table (P0-remainder, 2026-07-29, ember→chorus migration) so
-code that moves to a persona (the conversation tekton `activation`→lumen; the `delegate`) reaches these
-WITHOUT importing the giant instrument op-table.
+Code that lives in a persona (the conversation tekton `activation`→lumen; the `delegate`) reaches
+these without importing the giant instrument op-table:
 
-⭐ THE LAW IS NOT DEFINED HERE ANY MORE — IT IS IMPORTED (2026-07-30).
-------------------------------------------------------------------
-The provenance ladder and the system-authorship citation anchor are **law**: the same facts for
-Mantle, for beam and for every leaf. Ember is a runner, and a runner that *defines* a law is the
-shape where two copies drift apart — this module carried the five rung strings and `cite.genesis`
-as literals while `prism.mass` carried the identical ladder as an enum, so the law had two homes and
-neither was authoritative. `prism.mass` is now the single one:
+  * the provenance channels — `prism.mass.Provenance`, as the strings the stored rows carry.
+  * `CITE_GENESIS` — the anchor system artifacts cite (`prism.mass`).
 
-  * `Provenance` — the rungs, with their bands and the ladder invariant (`beam/mass.py`).
-  * `CITE_GENESIS` — the anchor system artifacts cite (`beam/mass.py`).
+The names below are the enum's own `.value`, so they are the same strings already written to every
+row, and the callers that import them from here (`genesis`, `seed_lattice`, `cuddler`,
+`lumen/conversation`) read exactly what the store holds. `.value` rather than the member itself,
+because a `str`-Enum formats as `Provenance.HUMAN_VALIDATED` under `%s`/`format()` in 3.11+ and
+these values reach both.
 
-The names below are re-exported UNCHANGED and are the enum's own `.value`, so they are the same
-strings that are already written to every row — nothing in the store moves, and the callers that
-import them from here (`genesis`, `seed_lattice`, `cuddler`, `lumen/conversation`) are untouched.
-`.value` rather than the member itself is deliberate: a `str`-Enum formats as
-`Provenance.HUMAN_VALIDATED` under `%s`/`format()` in 3.11+, and these values reach both.
-
-What is genuinely a RUNNER's, and stays: the conversation-triple content type, the transducer
+What is genuinely a runner's, and stays here: the conversation-triple content type, the transducer
 op-id prefix, and the UTC clock.
 
-⚠ MOVED FROM `ember/runtime/grounding.py` TO PRISM ON 2026-07-31. Everything in here is CONTRACT —
-the provenance rung aliases, the triple content type, the transducer op prefix, and a UTC stamp —
-and it already stood on `prism.mass`. It sat in the runner only because the runner hoisted it out of
-`genesis.py` first.
-
-The move was forced the same way `mass` was: `agience-mantle/src/mantle/shard/content_tier.py`
-needs `CITE_GENESIS` and `_now()`, and the declared layering says mantle may reach only origin and
-prism — never ember. A vocabulary that the store, the runner and the personas all stamp into
-artifacts cannot live in any one of them.
+It lives in `prism` because `agience-mantle/src/mantle/shard/content_tier.py` needs `CITE_GENESIS`
+and `_now()`, and the declared layering has mantle reaching origin and prism. A vocabulary that the
+store, the runner and the personas all stamp into artifacts belongs below all three.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from prism.mass import CITE_GENESIS, Provenance   # sibling now, not a cross-repo reach
+from prism.mass import CITE_GENESIS, Provenance   # a sibling module, so this is an in-package reach
 
-# ── provenance rungs — prism.mass.Provenance, spelled the way the stored rows spell it ────────
+# ── provenance channels — prism.mass.Provenance, spelled the way the stored rows spell it ─────
 P_HUMAN = Provenance.HUMAN_VALIDATED.value
 P_OBSERVED = Provenance.OBSERVED.value
 P_SPAN_CITED = Provenance.SPAN_CITED.value
@@ -48,23 +33,20 @@ P_HYPOTHESIS = Provenance.HYPOTHESIS.value
 P_ASSERTION = Provenance.ASSERTION.value
 
 # ── what a runner actually owns ──────────────────────────────────────────────────────────────
-# The conversation TRIPLE artifact (context/content/operator) the tekton recognizes/observes.
+# The conversation triple artifact (context/content/operator) the tekton recognizes/observes.
 TRIPLE_TYPE = "application/vnd.agience.triple+json"
 
-# ── the TRANSDUCER op-id prefix (option B — John, 2026-07-29: "Go B") ─────────
-# ONE place. Code and store now BOTH read `op.transducer.*` (migrated 2026-07-30).
-# Lives HERE (a leaf) rather than in `transducer.py` because `transducer` imports `wn_store`, so
-# `wn_store` — which also names an op-id — cannot import it back without a cycle; both reach `grounding`.
-# ⭐ FLIPPED 2026-07-30, WITH the migration, not before it. `node/transducer_rename.py --apply` renamed
-# the stored artifact (`op.gauge.language.en` → `op.transducer.language.en`, 1 row on node 71) and this
-# line moved in the same step.
+# ── the transducer op-id prefix ───────────────────────────────────────────────
+# One place. Code and store both read `op.transducer.*`.
+# Lives here (a leaf) rather than in `transducer.py` because `transducer` imports `wn_store`, so
+# `wn_store` — which also names an op-id — reaches `grounding` instead, and both stay acyclic.
 #
-# ⚠ THE TWO HALVES MUST LAND TOGETHER, AND A LAGGING HALF IS SILENT. `wn_store._keyed_ready()` only
-# asks whether `TRANSDUCER_OP + "language.en"` EXISTS. So whichever half lands alone leaves the node on
-# the SLOW UNKEYED PATH with no error and no log — a cold aperture that looks like a working node.
-# Code-first is the worse order (it searches for an id no store holds); store-first is merely slow.
-# The paired content-type `transducer.TRANSDUCER_CT` flips in the same step.
 TRANSDUCER_OP = "op.transducer."
+
+# This module is the runner's small surface: the provenance channels, the triple type, the op-id
+# prefix, and the clock. `agience-ember/tests/test_grounding_is_not_the_law.py` fences `__all__` so
+# it stays that size. Principal classification (`PROCESS_AUTHORS` / `is_process_author`) lives in
+# `prism/principals.py`.
 
 
 def _now() -> str:

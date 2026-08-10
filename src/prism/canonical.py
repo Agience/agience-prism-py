@@ -1,30 +1,22 @@
-# CANONICAL SOURCE OF RECORD for JCS in this workspace.
+# Canonical source of record for JCS in this workspace.
 #
-# Some consumers CANNOT import this module and must vendor a byte-identical copy instead:
-#   * agience-beam/src/beam/canonical.py       — beam is the fiber; it must not depend on prism
-#   * agience-bundle/deploy/canonical.py       — the installer runs in a bare environment
-# `agience-bundle/deploy/test_canonical_json_check.py` asserts every vendored copy is byte-identical
-# to THIS file, so a divergent copy fails the build. Everyone else (crystal, ember, chorus) imports
+# A consumer that cannot import this module vendors a byte-identical copy instead:
+#   * agience-cloud/deploy/canonical.py        — the deploy gate runs in a bare environment
+# `agience-cloud/deploy/test_canonical_json_check.py` asserts every vendored copy is byte-identical
+# to this file, so a divergent copy fails the build. Everyone else (crystal, ember, chorus) imports
 # `prism.canonical` directly — crystal => prism is already the dependency direction.
 """RFC 8785 (JCS) canonical JSON — the one serialization a content address is taken over.
 
-Two hosts agree on a sha only if they agree on THREE independent things. JCS pins all three, and on
-2026-07-29 this workspace was measured getting all three wrong between prism-py and prism-js:
+Two hosts agree on a sha only if they agree on three independent things, and JCS pins all three:
 
-  1. STRINGS   raw UTF-8; no `\\uXXXX` escaping of non-ASCII.
-  2. NUMBERS   rendered per ECMAScript `Number::toString` — `1.0` is `1`, `-0.0` is `0`, and the
+  1. strings   raw UTF-8; no `\\uXXXX` escaping of non-ASCII.
+  2. numbers   rendered per ECMAScript `Number::toString` — `1.0` is `1`, `-0.0` is `0`, and the
                fixed/exponential switch is at 1e21 / 1e-7. Python's `repr` disagrees on all three.
-  3. KEYS      sorted by UTF-16 CODE UNITS, not code points. They differ for astral-plane characters:
-               a surrogate pair begins at 0xD800, which sorts BELOW U+FFFD.
+  3. keys      sorted by UTF-16 code units, not code points. They differ for astral-plane characters:
+               a surrogate pair begins at 0xD800, which sorts below U+FFFD.
 
-⚠ A DELIBERATE LOSS lives in (2): JCS numbers are IEEE-754 doubles, so an integer beyond 2^53 is
-coerced — `9007199254740993` canonicalizes as `…992`, exactly as JavaScript does. That is
-CONFORMANCE, not a bug. It is also the strongest argument for the structural-encoding successor John
-called "structural permanence" (`NEXT.md §P.4`): a typed binary form keeps the integer exact instead
-of silently rounding it. Until then, agreeing wrongly beats disagreeing.
-
-Stdlib-only on purpose — a bare host, an installer, or the fiber must be able to compute a content
-address without pulling a dependency tree.
+Stdlib-only on purpose — a bare host or an installer must be able to compute a content address
+without pulling a dependency tree.
 """
 from __future__ import annotations
 
@@ -96,7 +88,7 @@ def _emit(obj: Any, buf: List[str]) -> None:
 
 
 def canonical_string(obj: Any) -> str:
-    """The canonical form as text. Prefer `canonical_json` — a content address is over BYTES."""
+    """The canonical form as text. Prefer `canonical_json` — a content address is over bytes."""
     buf: List[str] = []
     _emit(obj, buf)
     return "".join(buf)
@@ -108,21 +100,14 @@ def canonical_json(obj: Any) -> bytes:
 
 
 def canonical_payload(content: Any) -> bytes:
-    """The bytes a sha is taken over, for content of ANY shape.
+    """The bytes a sha is taken over, for content of any shape.
 
     bytes pass through, a str is UTF-8, anything else is canonical JSON. That third case is why this
-    belongs here and not beside a caller: the moment "what do we hash" and "how do we canonicalise"
-    live in different files, they can answer differently.
+    belongs here and not beside a caller: while "what do we hash" and "how do we canonicalise" live
+    in one file, they answer as one.
 
-    ⚠ CONSOLIDATED 2026-07-31. This existed TWICE — `agience-cloud/deploy/bundle_manifest.py` and
-    `agience-chorus/src/seraph/install.py`, the latter with a docstring reading "bundle_manifest.
-    canonical_payload semantics", which is a hand-copied restatement announcing itself as one. The
-    two were still byte-identical when measured, so nothing was broken; but this decides BUNDLE SHAs,
-    and a sha that two components compute differently does not fail loudly — it fails as a signature
-    that verifies on the machine that made it and nowhere else.
-
-    Living in `canonical.py` also puts it under the vendoring gate for free: the bare-host installer
-    copy of this file is asserted byte-identical to it, so the installer cannot drift either."""
+    Living in `canonical.py` also puts it under the vendoring gate for free: the vendored deploy
+    copy of this file is asserted byte-identical to it, so that copy answers identically too."""
     if isinstance(content, (bytes, bytearray)):
         return bytes(content)
     if isinstance(content, str):

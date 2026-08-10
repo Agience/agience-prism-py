@@ -1,13 +1,50 @@
 name: ci
 on: { push: { branches: [main], tags: ['v*'] }, pull_request: {}, workflow_dispatch: {} }
 jobs:
-  build-import:
+  # The base install is the CONTRACT and carries no dependencies. Two jobs, because one
+  # `pip install .` followed by `from prism import Host` tests neither half: it fails on the
+  # missing extra and never checks that the contract stands alone.
+  contract-only:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-      - run: |
-          python -m pip install --upgrade pip
+      - run: python -m pip install --upgrade pip
+      - name: Base install carries no dependencies
+        run: |
           pip install .
-          python -c "from prism import Host, create_server, Server, TokenVerifier, AuthError; print('agience-prism-py SDK OK')"
+          pip check
+          python - <<'PY'
+          import importlib.metadata as md
+          own = {"agience-prism-py", "pip", "setuptools", "wheel"}
+          extra = sorted({(d.metadata["Name"] or "").lower() for d in md.distributions()} - own)
+          assert not extra, f"base install pulled in dependencies: {extra}"
+          print("base install is dependency-free")
+          PY
+      - name: The contract surface imports
+        run: python -c "from prism import Capability, Prism, PRISM_CONTENT_TYPE, AuthError, PrismError, http_status_for; print('contract OK')"
+      - name: A runtime name raises, naming its extra
+        # The negative control. Without it the step above would still pass on a build where the
+        # runtime surfaces had been folded into the base install.
+        run: |
+          python - <<'PY'
+          try:
+              from prism import Host
+          except ImportError as exc:
+              assert "host" in str(exc), exc
+              print("runtime surface correctly gated")
+          else:
+              raise SystemExit("prism.Host imported without the 'host' extra")
+          PY
+
+  runtime-surfaces:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: python -m pip install --upgrade pip
+      - run: pip install '.[all]'
+      - run: pip check
+      - run: python -c "from prism import Host, create_server, Server, TokenVerifier, AuthError; print('agience-prism-py SDK OK')"

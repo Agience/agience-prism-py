@@ -10,8 +10,11 @@ A *host* (agience-prism-py) can run servers like this directly, controlled by
 artifacts — see examples/host/host_template.py for the compute side.
 
 Run:
-    pip install agience-prism-py uvicorn
-    AGIENCE_API_URI=http://localhost:8081 python examples/server/server_template.py
+    pip install "agience-prism-py[server]" uvicorn
+    MANTLE_URI=http://localhost:8081 python examples/server/server_template.py
+
+The `server` extra carries mcp and httpx; uvicorn is named separately because this
+template runs it directly.
 """
 import json
 

@@ -1,55 +1,31 @@
-"""prism-py against the SHARED cross-SDK contract vectors.
+"""prism-py against the shared cross-SDK contract vectors.
 
-`agience-beam/vectors/contract_vectors.json` is the one artifact every prism SDK is checked against.
-Its companion is `agience-prism/js/test/contractVectors.test.ts`, which asserts the SAME expectations
-from TypeScript — so byte-parity between the SDKs is ENFORCED rather than asserted in a README.
+`prism/vectors/contract_vectors.json` — shipped inside this package — is the one artifact every prism
+SDK is checked against.
+Its companion is `agience-prism/js/test/contractVectors.test.ts`, which asserts the same expectations
+from TypeScript, so byte-parity between the SDKs is enforced by a test rather than by a README.
 
-🔴 MOVED 2026-07-29 (Contract Builder, John's call) from `agience-prism/vectors/`, which was **in no git
-repository at all**: `agience-prism/` is not a repo — only `c`, `js` and `py` are, each with its own
-remote — and `vectors/` sat beside them, tracked by none. The single source of truth for every content
-address in this workspace had no history (a re-baseline was undiffable), was on no remote (`push-all`
-could not carry it; it died with the box), and, because both SDKs read the SAME file, an edit moved
-Python and JS together — so the two-sided assertion that exists to catch drift could not catch drift
-introduced through the vectors themselves.
-It lives in **beam** because beam already holds one of the two sanctioned byte-identical copies of
-`canonical.py` and is gated against these very vectors, so it was already a participant; and because
-beam imports nothing from the workspace, no repo has to invert a dependency to read a data file from
-it. Not mantle: mantle is FORBIDDEN from any prism coupling by its own `test_embeddable_surface.py`
-and does not consume the vectors, so the contract would have been parked in the one repo required to
-stay ignorant of it. This suite already read a path outside its own repo, so nothing about prism/py's
-standalone status changed.
-
-This is what §P.2 said was missing: the vocabulary drift gate compares NAMES, and would not have caught
-the 2026-07-29 bug where Python escaped non-ASCII and prism-c did not. These vectors would have.
+The vocabulary drift gate compares names, so it says nothing about bytes: one SDK escaping non-ASCII
+while another emits it raw passes that gate. These vectors compare the bytes themselves.
 """
 import hashlib
-import json
-import pathlib
 
 import pytest
 
 from prism.crystal_model import canonical_json, crystal_sha
+from prism.vectors import load_vectors
 
-#: `parents[3]` is the genesis root: this file is at
-#: `<root>/agience-prism/py/tests/test_contract_vectors.py`. The depth is ASSERTED below rather than
-#: trusted — a wrong `parents[N]` resolves to a directory that simply does not contain the file, and
-#: this workspace has already been bitten by that exact idiom passing VACUOUSLY (`test_one_aperture.py`
-#: used `parents[3]` where it needed `parents[2]`, landing above the workspace, and read green).
-_ROOT = pathlib.Path(__file__).resolve().parents[3]
-VECTORS = _ROOT / "agience-beam" / "tests" / "vectors" / "contract_vectors.json"
-
-
-def _load():
-    assert (_ROOT / "agience-prism" / "py").is_dir(), (
-        "path depth is wrong: parents[3] should be the genesis root but %s does not contain "
-        "agience-prism/py — fix the depth, do not adjust the vectors path" % _ROOT)
-    assert VECTORS.is_file(), (
-        "shared contract vectors missing at %s — without them this suite passes vacuously and the "
-        "SDKs can drift apart unnoticed" % VECTORS)
-    return json.loads(VECTORS.read_text(encoding="utf-8"))
-
-
-DATA = _load()
+# The vectors ship as package data inside prism itself, so this resolves through
+# `importlib.resources` — the same mechanism a `pip install`ed consumer uses, with no source tree,
+# no sibling repo and no directory depth to get wrong.
+#
+# A parent-directory walk into a sibling checkout has neither property. A wrong `parents[N]` lands
+# in a directory that simply does not contain the file, and a consumer that skips on absence then
+# reads green while checking nothing.
+#
+# `load_vectors` raises on absence, so every path through this module that reports success has the
+# data behind it.
+DATA = load_vectors("contract_vectors")
 
 
 def test_the_vector_file_is_actually_populated():
@@ -76,7 +52,7 @@ def test_crystal_sha_matches_the_shared_vector(case):
 
 
 def test_non_ascii_vectors_are_raw_utf8_not_escaped():
-    """The invariant the vectors exist to protect — stated once, plainly."""
+    """The invariant the vectors exist to protect: canonical JSON carries non-ASCII as raw UTF-8."""
     for case in DATA["canonical_json"]:
         if case["name"].startswith("non_ascii") or case["name"] == "astral_emoji":
             assert "\\u" not in case["canonical"], (
@@ -116,8 +92,8 @@ def test_structural_encoding_matches_the_shared_vector(case):
 
 
 def test_the_bigint_vector_is_the_one_jcs_cannot_represent():
-    """Guards the vector's PURPOSE, not just its value: if someone 'simplifies' this case to a small
-    integer, the file would stay green while no longer proving anything."""
+    """Guards the vector's purpose, not just its value: if this case were 'simplified' to a small
+    integer, the file would stay green while checking nothing."""
     from prism.canonical import canonical_json
     case = next(c for c in DATA["structural"] if c["name"] == "s_bigint")
     big = _realize(case["value"])["a"]
@@ -126,12 +102,12 @@ def test_the_bigint_vector_is_the_one_jcs_cannot_represent():
     assert canonical_json({"a": big}) == canonical_json({"a": big - 1})
 
 
-# ── THE JUNCTION (added 2026-07-29, Contract Builder — NEXT.md §5.3) ──────────────────────────────
+# ── the junction (Contract Builder — NEXT.md §5.3) ────────────────────────────────────────────────
 #
-# §5.3: "The drift gate covers NAMES only — it would not have caught a single item in §5.1." It did not.
-# Cross-checking these four functions against prism-js found TWO live divergences in the code that decides
-# whether a host grounds a crystal at all — each SDK held half the validation. Details in the vector
-# file's `_junction_comment`. These pin the agreement so it cannot drift back.
+# These four functions are the code that decides whether a host grounds a crystal at all. A drift gate
+# over names says nothing about them, and validation split across two SDKs diverges quietly, each one
+# holding half the check. Details in the vector file's `_junction_comment`. These vectors pin the
+# agreement between the SDKs.
 
 def test_the_junction_sections_are_populated():
     """Vacuous-pass guard: an absent section would silently skip every case below."""
@@ -164,22 +140,19 @@ def test_required_capabilities_matches_the_shared_vector(case):
 @pytest.mark.parametrize("case", DATA.get("validate", []),
                          ids=[c["name"] for c in DATA.get("validate", [])])
 def test_validate_matches_the_shared_vector(case):
-    """Problem MESSAGES are pinned verbatim, not just counted.
+    """Problem messages are pinned verbatim, not just counted.
 
-    Counting was how the first cross-check reported this — and a count would have let the two SDKs
-    disagree about WHICH problem they found while agreeing on how many. The messages are byte-identical
-    across prism-py and prism-js by design.
+    A count alone would let the two SDKs disagree about which problem they found while agreeing on
+    how many. The messages are byte-identical across prism-py and prism-js by design.
     """
     from prism.crystal_model import validate
     assert validate(case["crystal"]) == case["problems"]
 
 
 def test_the_capability_spelling_check_exists_here_at_all():
-    """prism-py — the SIGNER — had no spelling check while prism-js did.
-
-    Pinned separately from the vectors because this is the property, not an example: an unknown kind must
-    be REFUSED before it can be signed into an artifact, and open-family members must still be accepted
-    or every real sensor is refused with it.
+    """Pinned separately from the vectors because this is a property, not an example: an unknown
+    capability kind is rejected before it can be signed into an artifact, and an open-family member
+    is still accepted — the check that catches a typo must not reject every real sensor with it.
     """
     from prism.crystal_model import validate
     base = {"name": "c", "created_by": "j", "facets": [{"name": "f", "direction": "out"}],

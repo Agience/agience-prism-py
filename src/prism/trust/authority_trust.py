@@ -4,7 +4,7 @@ Each service loads `KEYS_DIR/authority.manifest.json` once at startup. The manif
 contains the platform issuer and per-service inline JWKS (origin / mantle / chorus).
 Verification of peer-service JWTs uses these anchors directly — no HTTP fetch.
 
-Signing of the running service's own tokens lives in `origin.service_identity`.
+Signing of the running service's own tokens lives in `prism.trust.service_identity`.
 
 Manifest shape (written by the init container):
 
@@ -37,10 +37,10 @@ from jose.exceptions import JWTError
 
 logger = logging.getLogger(__name__)
 
-# How long a cached manifest is considered fresh. Authority updates emit an
-# `authority.updated` event that consumers should subscribe to and call
-# `reload_authority_manifest()` on. The TTL is a fallback for processes that
-# missed the event.
+# The freshness window a consumer may apply to a cached manifest. Authority updates emit an
+# `authority.updated` event; a consumer subscribes to it and calls `reload_authority_manifest()`.
+# The cache in this module holds until that call, so this value is published for consumers that
+# want a time-based re-read as well.
 DEFAULT_MANIFEST_TTL_SECONDS = 300
 
 
@@ -75,10 +75,10 @@ def _manifest_path() -> Path:
 
 
 def load_authority_manifest() -> AuthorityManifest:
-    """Read and parse the authority manifest. Idempotent; safe to call repeatedly.
+    """Read and parse the authority manifest, caching it. Idempotent; safe to call repeatedly.
 
-    Raises FileNotFoundError if the manifest is absent — services must fail fast
-    at boot if the trust map is missing. Operators re-run init to produce one.
+    Raises FileNotFoundError if the manifest is absent, so a service with no trust map fails at
+    boot rather than while serving. Operators re-run init to produce one.
     """
     global _manifest
     with _manifest_lock:
@@ -165,37 +165,17 @@ def verify_jwt(
     # we decode without aud check, then validate manually against the list.
     audience_list = expected_audience if isinstance(expected_audience, list) else None
     audience_single = expected_audience if isinstance(expected_audience, str) else None
-    # ⛔ TYPE CONFUSION SILENTLY DISABLED AUDIENCE VERIFICATION ENTIRELY.
-    # Anything not str/list/None — a TUPLE, the natural thing to reach for — left both locals
-    # None, took the `audience_single is None` branch below, turned `verify_aud` OFF, passed no
-    # `audience` to decode, AND skipped the manual list check. A caller asking for a STRICTER
-    # check (several accepted audiences) got no check at all. The `: str` hint is not enforced.
     if expected_audience is not None and audience_list is None and audience_single is None:
         raise TypeError(
             "expected_audience must be a str, a list of str, or None — got %r. Refusing rather "
             "than silently skipping audience verification." % type(expected_audience).__name__)
 
     options: Dict[str, Any] = {}
-    # ⛔ python-jose DEFAULTS `require_aud` AND `require_exp` TO FALSE, AND NEITHER WAS SET.
-    # `_validate_aud` returns immediately when "aud" is absent; `_validate_exp` likewise for
-    # "exp". Verified by execution against python-jose 3.5.0:
-    #   * a token with NO `aud` PASSED `audience="mantle"` — it satisfied EVERY audience at once,
-    #     which is the confused-deputy boundary this helper exists to enforce;
-    #   * a token with NO `exp` was a PERMANENTLY VALID bearer token, while this function's
-    #     docstring promises JWTError on "expired".
-    # Both fail OPEN on an ABSENT claim. The function also contradicted itself: the
-    # list-of-audiences path below explicitly raises "token has no audience claim" while the
-    # single-string path accepted it — same function, opposite verdicts on the same token.
-    #
-    # ⚠ THIS FILE IS A FORK of `agience-origin/src/origin/authority_trust.py`. The same three defects
-    # were fixed there first; a security fix applied to one copy of a forked file leaves the hole
-    # open in the other, and this copy has live callers passing `expected_audience`. Keep the two
-    # in step, or collapse the fork.
     options["require_exp"] = True          # a token that cannot expire is not a session
     if audience_list is not None or audience_single is None:
         options["verify_aud"] = False
     else:
-        options["require_aud"] = True      # absent aud must FAIL, not match everything
+        options["require_aud"] = True      # an absent aud fails rather than matching everything
     if expected_issuer_claim is None:
         options["verify_iss"] = False
 

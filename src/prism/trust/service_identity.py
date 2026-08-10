@@ -2,7 +2,7 @@
 
 Each service (origin, mantle, chorus) holds its own RSA private key in `KEYS_DIR`.
 This module loads it once at startup and exposes the API for signing service-to-service
-JWTs. Verification of peer-service JWTs lives in `origin.authority_trust`.
+JWTs. Verification of peer-service JWTs lives in `prism.trust.authority_trust`.
 
 Key files (written by the init container):
   KEYS_DIR/origin.private.pem    only origin reads this
@@ -34,10 +34,10 @@ from jose import jwt as jose_jwt
 
 logger = logging.getLogger(__name__)
 
-# Service names recognized by the authority manifest. New services would extend this.
-# `crystal` is the content-type gateway (agience-crystal): a platform service so it can
-# subscribe to Mantle's change-feed as a system consumer and mint delegations for
-# event-driven describers.
+# Service names recognized by the authority manifest; `init_service_identity` accepts these and
+# nothing else. `crystal` is the content-type gateway (agience-crystal): a platform service so it
+# can subscribe to Mantle's change-feed as a system consumer and mint delegations for event-driven
+# describers. `lumen` is the conversation persona hosted in agience-chorus.
 SERVICE_NAMES = ("origin", "mantle", "chorus", "crystal", "lumen")
 
 # Default service-to-service JWT TTL (seconds). Short — these tokens are issued
@@ -128,8 +128,9 @@ def init_service_identity(service_name: str) -> ServiceIdentity:
     Call once at lifespan startup. After this returns, `get_service_identity()`
     is available process-wide.
 
-    Raises FileNotFoundError if the expected `{service_name}.private.pem` is absent —
-    services must fail fast at boot if their identity is missing.
+    Raises ValueError for a name outside `SERVICE_NAMES`, and FileNotFoundError if the
+    expected `{service_name}.private.pem` is absent, so a service with no identity fails at
+    boot rather than while serving.
     """
     global _loaded
     if _loaded is not None and _loaded.name == service_name:
@@ -192,10 +193,9 @@ def sign_service_jwt(
     Pass additional_claims to add fields (e.g. scopes, request_id). Existing
     keys win — additional_claims cannot override the default claims above.
 
-    `issuer_override` is for narrow cases where the service speaks on behalf of a
-    different identity (rare; only used during bootstrap-token claim where Origin
-    speaks as itself but binds to the deployment's authority issuer). Otherwise
-    use the default.
+    `issuer_override` replaces the `iss` claim for the narrow case where the service
+    speaks as itself but binds to a different issuer — the bootstrap-token claim, where
+    Origin binds to the deployment's authority issuer. Leave it unset otherwise.
     """
     identity = get_service_identity()
     now = int(time.time())
@@ -232,7 +232,7 @@ def sign_delegation_jwt(
 
     Every action carries Authority/Host/Server/User: `iss` (authority — the
     signing service), `host_id` (host — the current instance), `act.sub` (server
-    — the actor performing the delegation), `sub` (user). Mantle's auth REQUIRES
+    — the actor performing the delegation), `sub` (user). Mantle's auth requires
     all of these on a delegation, so `host_id` is stamped by default (resolved via
     `get_host_id()`); pass `host_id` to override.
 

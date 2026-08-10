@@ -1,8 +1,8 @@
-"""The `prism` CLI pinned: init generates identity+manifest (and refuses to clobber),
+"""The `prism` CLI pinned: init generates identity+manifest and leaves an existing one untouched,
 list is the self-filtering catalog, install runs the op.install verification semantics
-client-side (sha gate, tamper refusal, pin check, capability gap NAMED, policy-gated
-kinds refused typed), publish validates + sha-stamps before the PUT. The HTTP boundary
-(`cli._http_get` / `cli._http_post`) is mocked — no network in tests."""
+client-side (sha gate, a tampered bundle does not verify, pin check, capability gap NAMED,
+policy-gated kinds typed by exit code), publish validates + sha-stamps before the PUT. The HTTP
+boundary (`cli._http_get` / `cli._http_post`) is mocked — no network in tests."""
 from __future__ import annotations
 
 import json
@@ -83,17 +83,17 @@ def test_init_generates_identity_and_manifest(keys_dir):
 
 
 def test_init_refuses_an_unknown_capability_kind(keys_dir, capsys):
-    """The manifest is an ADVERTISEMENT the host signs, so a typo here is advertised to the platform
-    and only rejected later at validation — which is exactly how prism-c shipped `storage`/`webgpu`
-    unnoticed. `webgpu` is that real historical typo for `compute.gpu`."""
+    """The manifest is an ADVERTISEMENT the host signs, so a typo in a capability kind is advertised
+    to the platform and caught only later, at validation — `init` catches it up front instead.
+    `webgpu` stands in for the real capability, `compute.gpu`."""
     rc = cli.main(["init", "--keys-dir", str(keys_dir), "--capabilities", "compute.local,webgpu"])
     assert rc == cli.EXIT_ERROR
     assert "webgpu" in capsys.readouterr().out
 
 
 def test_init_rejects_before_generating_an_identity(keys_dir):
-    """Refusing AFTER writing the keypair would strand an identity, and the corrected retry would
-    then fail with 'already exists' — so the validation must come first."""
+    """Validating AFTER writing the keypair would strand an identity, and the corrected retry would
+    then fail with 'already exists' — so validation runs first."""
     assert cli.main(["init", "--keys-dir", str(keys_dir), "--capabilities", "bogus"]) == cli.EXIT_ERROR
     assert not (keys_dir / "host.private.pem").exists()
     assert not (keys_dir / cli.MANIFEST_NAME).exists()
