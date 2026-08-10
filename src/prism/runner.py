@@ -1,92 +1,72 @@
-"""The pattern RUNNER — a HOST executes operator code through THE ONE DISTRIBUTION PATH.
+"""The pattern runner — a host executes operator code through the one distribution path.
 
-2026-07-23, John's directive: "No dual path. Single path only." The operator implementations'
-authoritative home is chorus; no host holds code copies. Chorus publishes each register group as a
-SOURCE BUNDLE — the impl module plus its impl-internal deps, with a manifest
-{group, entry_module, register_fns, host_seams, modules, sha256} — and this module loads a bundle,
-VERIFIES it, and execs it into an isolated namespace. Everything a host used to import from mirror
-modules (arithmetic, operators, describe, dev_ops, docs_ops, corpus, fetch, evolution, category,
-code_index, doc_index) is reached through here:
+There is a single distribution path. The operator implementations' authoritative home is chorus, and
+no host holds code copies. Chorus publishes each register group as a source bundle —
+the impl module plus its impl-internal deps, with a manifest {group, entry_module, register_fns,
+host_seams, modules, sha256} — and this module loads a bundle, verifies it, and execs it into an
+isolated namespace.
 
     from prism.runner import arithmetic            # the loaded bundle's entry module
     from prism.runner import evolution             # a shared dep, from its canonical bundle
 
-⚠ MOVED HERE FROM `ember/runtime/runner.py` — 2026-08-02, the chorus→ember DAG work. Behaviour
-unchanged apart from host seams becoming injected (see `_HOST_SEAMS`). It reads as ember's because it
-was ember's, and that was the defect: **chorus was importing the RUNNER to load bundles whose
-authoritative source is chorus itself.** A round trip out of the repo that authors the code and back,
-purely to reach a loader.
+It adds no hard dependency: everything is stdlib or prism-internal, and `opsign` (the only
+`cryptography` reach) is imported lazily inside the env-gated trust leg.
 
-Why prism, specifically:
-  * The loader's dependencies were already prism's — `prism.canonical` for the canonical form,
-    `prism.crystal_model.bundle_canonical` for the bundle's own canonicalization, `prism.mass` for the
-    provenance ladder, and `prism.trust.opsign` for signatures. Nothing but the one hardcoded host seam
-    tied it to ember.
-  * prism is a PURE LEAF, so both the runner (ember) and the personas (chorus) reach it downward. There
-    is no other home below both: mantle is beam's sibling and beam is the signal.
-  * A BUNDLE is *"a named Prism + Crystals + Ember — the installable"* (see `_data_dir()`), and prism's
-    CLI already verifies bundle shas on `install`. Verifying and grounding a bundle is prism's story;
-    executing one is the same story's last step.
+Content addressing is the integrity gate. A bundle's sha256 is computed over the canonical JSON
+payload of everything except the sha itself (see `_canonical`). Before any exec the hash is
+recomputed and compared; a mismatch raises `BundleIntegrityError`. There is no unverified path.
 
-This module executes verified code, so it is NOT part of prism's zero-dependency base contract in
-spirit — but it adds no hard dependency either: everything above is stdlib or prism-internal, and
-`opsign` (the only `cryptography` reach) is imported lazily, inside the env-gated trust leg.
+Where bundles come from, in order:
+  1. The local store: artifact `bundle-<group>`, content_type
+     `application/vnd.agience.bundle+json`, its `content` the bundle JSON — the mesh path, where
+     bundles travel as artifacts. sha-verified and provenance-checked.
+  2. A file the host bound to the group with `register_group(name, path)` — for a payload that
+     lives outside the shipped directory (a third-party tekton's bundle beside its own package).
+     sha-verified against its own manifest, exactly like (3).
+  3. The shipped data files `agience-bundle/bundles/<group>.json`, built from chorus
+     `definitions/bundles/`. Same bytes, same sha the mesh carries; it exists so an offline node
+     bootstraps with no chorus checkout and no store bundle. sha-verified against its own manifest.
 
-CONTENT ADDRESSING IS THE INTEGRITY GATE. A bundle's sha256 is computed over the canonical
-JSON payload of everything except the sha itself (build_bundles.canonical, reproduced in
-`_canonical` below — same keys, ordering, separators). Before ANY exec the hash is recomputed
-and compared; a mismatch raises `BundleIntegrityError` loudly. There is no unverified path.
+Version-pinned per process: the first successful load of a group pins that bundle for the process
+lifetime — one logical runtime runs one version of an operator throughout; a restart picks up newer
+bundles. `attach(store)` at boot, before the first load, is what lets store bundles take precedence
+over shipped ones.
 
-WHERE BUNDLES COME FROM (in order):
-  1. The local store: artifact `bundle-<group>` with content_type
-     `application/vnd.agience.bundle+json`, its `content` the bundle JSON. This is the mesh
-     path — bundles travel as artifacts like everything else. sha-verified + provenance-checked.
-  2. The SHIPPED DATA files `agience-bundle/bundles/<group>.json` — built there from chorus
-     `definitions/bundles/`. A data mirror of content-addressed SIGNED CONTENT is distribution,
-     not a code fork: the same bytes, the same sha, that the mesh will later carry. It exists so
-     an offline node bootstraps with no chorus checkout and no store bundle present. sha-verified
-     against its own manifest. ⛔ These files used to live at `ember/bundles/` and were MOVED OUT
-     2026-07-30 — a BUNDLE is the installable (Prism + Crystals + Ember), so the payloads are the
-     bundle repo's, and ember is the runner that loads and verifies them. See `_data_dir()`.
+Trust gate (flagged seam — `verify_provenance`): sha-verification is the integrity leg and is always
+enforced. The signature/rung leg is implemented but env-gated:
 
-VERSION-PINNED PER PROCESS: the first successful load of a group pins that bundle for the
-process lifetime (the same rule as genesis.invoke's `_pinned` — one logical runtime runs ONE
-version of an operator throughout; a restart picks up newer bundles). `attach(store)` at boot,
-BEFORE the first load, is what lets store bundles take precedence over shipped ones.
+  * `EMBER_REQUIRE_SIGNED` unset (default): sha check plus a `created_by`-resolvable check against
+    the store (an executable artifact with no resolvable author carries no authority), and one
+    breadcrumb log line at import saying the gate is off.
+  * `EMBER_REQUIRE_SIGNED=1`: a store-sourced bundle must additionally carry a valid Ed25519
+    signature (`opsign.sign_bundle` envelope over the same canonical payload the sha covers), the
+    signing key must be attested by the store-resolved author artifact (an embedded key alone proves
+    self-consistency, not authorship), and the author's channel (`prism.mass.provenance_of`) must
+    ground something: `EMBER_BUNDLE_CHANNELS` when set, else `prism.mass.has_referent`.
 
-TRUST GATE (flagged seam — `verify_provenance`): sha-verification is the INTEGRITY leg and is
-always enforced. The signature/rung leg — the Higgs rule: provenance is the field that splits
-message from event, and an executable pattern must carry a verified signature + authority rung
-before exec — is IMPLEMENTED but env-gated, staged for the cutover:
+Shipped data files ride package-install trust and skip the store-provenance leg only, under either
+gate state.
 
-  * `EMBER_REQUIRE_SIGNED` unset (the default): behavior is exactly the pre-gate honest
-    default — the sha check plus a `created_by`-resolvable check against the store (an
-    executable artifact with no resolvable author is refused) — plus one breadcrumb log line
-    at import saying the gate is OFF. Nothing else changes.
-  * `EMBER_REQUIRE_SIGNED=1`: a STORE-sourced bundle must additionally carry a valid Ed25519
-    signature (`opsign.sign_bundle` envelope: `signature`/`signed_by` over the same canonical
-    payload the sha covers), the signing key must be ATTESTED by the store-resolved author
-    artifact (an embedded key alone proves self-consistency, not authorship — opsign's own
-    caveat), and the author's provenance rung (`prism.mass.provenance_of`) must meet the floor:
-    `EMBER_MIN_BUNDLE_RUNG` (a rung name on `prism.mass.CLAIM_LADDER`) when set, else the
-    DERIVED default — the rung must weigh above `prism.mass.GHOST_FLOOR`, the vocabulary's one
-    existing trust floor ("at/below this, mass is not real"). No invented number: the default
-    excludes exactly the ghost rungs; set `EMBER_MIN_BUNDLE_RUNG` to tighten. Failure raises
-    `BundleTrustError` — refuse to ground, never warn-and-run.
-
-Shipped data files ride package-install trust (they are part of the installed distribution) and skip
-the store-provenance leg only — under either gate state.
-
-HOST SEAMS: a bundle DECLARES the host modules it may reach for (`host_seams`, e.g. the
-`operators` group's optional geometric matcher `match`). The mapping from seam name to the module
-that fills it is REGISTERED BY THE HOST (`register_seam`); an unfilled seam leaves the bundle's own honest fallback
-in charge (operators.select_for answers basis="generic"). Seams are store/host machinery —
+Host seams: a bundle declares the host modules it may reach for (`host_seams`). The seam→module
+mapping is registered by the host (`register_seam`); an unfilled seam leaves the bundle's own
+fallback in charge (operators.select_for answers basis="generic"). Seams are store/host machinery,
 never operator code.
 
-MODULE SHARING BY CONTENT: bundle modules with no intra-bundle (relative) imports — answer,
-evolution, category, code_index, doc_index, content — are cached by sha256(source) and SHARED
-across bundles, so `evolution` is one module object and `Answer` one class process-wide
-whenever the distributed bytes are identical. Identity follows content, exactly like the store.
+Which groups exist is discovered, not declared. A group exists when its payload does, so there is no
+list to add to and a host or third party introduces one without editing prism. `known_groups()`
+reports what is discoverable locally — every `<group>.json` in the shipped directory, plus whatever
+a host bound with `register_group(name, path)`. `load()` is not gated on that report: it asks the
+store, then the file, and raises `UnknownBundleGroupError` when no payload exists anywhere for the
+group.
+
+Discovery adds places to look, never a way to skip a check. Every route ends in `_verify_sha` and,
+for store bundles, `verify_provenance`. `_verify_group` additionally binds the group name to the
+payload, which is what keeps a host-supplied path honest about what it carries.
+
+Module sharing by content: bundle modules with no intra-bundle (relative) imports — answer,
+evolution, category, code_index, doc_index, content — are cached by sha256(source) and shared across
+bundles, so `evolution` is one module object and `Answer` one class process-wide whenever the
+distributed bytes are identical. Identity follows content, exactly like the store.
 """
 from __future__ import annotations
 
@@ -111,26 +91,19 @@ BUNDLE_CONTENT_TYPE = "application/vnd.agience.bundle+json"
 BUNDLE_ARTIFACT_PREFIX = "bundle-"
 
 def _data_dir() -> Optional[Path]:
-    """Where the SHIPPED bundle files live — in `agience-bundle`, never inside a host package.
+    """Where the shipped bundle files live — in `agience-bundle`, never inside a host package.
 
-    ⛔ THEY USED TO SIT AT `ember/src/ember/bundles/*.json` AND THEY DO NOT BELONG THERE
-    (John, 2026-07-30: *"it's a BUNDLE feature so I moved it into agience-bundle"*). A BUNDLE is a
-    named Prism + Crystals + Ember — the installable — so the bundle payloads are the bundle repo's
-    concern. Ember is the RUNNER: it loads and verifies them, it does not ship them. Six tracked
-    JSON files living under `src/ember/` made the runner look like their owner and made ember's
-    package carry a copy of content that the mesh distributes.
-
-    RESOLUTION ORDER, and every step is explicit rather than guessed:
+    Resolution order, and every step is explicit rather than guessed:
       1. `$AGIENCE_BUNDLE_ROOT` — what a deployment sets. Points at the directory holding
          `<group>.json`, or at the `agience-bundle` checkout containing `bundles/`.
       2. The sibling `agience-bundle/bundles/` next to this checkout — the developer case.
-      3. None. There is NO in-package fallback, deliberately: a silent fallback to a stale embedded
+      3. None. There is no in-package fallback, deliberately: a silent fallback to a stale embedded
          copy is exactly how two versions of a content-addressed payload start to disagree, and the
          sha gate would then be verifying the wrong bytes faithfully.
 
-    Returning None is not an error here — the STORE is the primary source (path 1 in the module
-    docstring) and a node with its bundles in the lattice needs no files at all. `_load_shipped`
-    reports the absence when it is actually reached.
+    Returning None is not an error here — the store is the primary source (path 1 in the module
+    docstring) and a node with its bundles in the lattice needs no files at all. `_bundle_from_data`
+    raises when the absence is actually reached.
     """
     raw = os.getenv("AGIENCE_BUNDLE_ROOT", "").strip()
     candidates = []
@@ -152,7 +125,15 @@ def _data_dir() -> Optional[Path]:
 
 _DATA_DIR = _data_dir()
 
-GROUPS = ("arithmetic", "operators", "dev_ops", "docs_ops", "corpus", "fetch")
+# `GROUPS` answers through `__getattr__` at the foot of this module (`from prism.runner import
+# GROUPS`, and ember re-exports it), and what it answers with is `known_groups()`: a measurement of
+# the payloads that exist, taken at the moment it is asked.
+
+# A group name goes into a filename (`<group>.json`) and into a module name
+# (`_agience_bundle_<group>_<sha12>`), so it must be a Python identifier. The constraint is derived
+# from those two uses: `..` or `a-b` would either escape the bundle directory or produce a package
+# name no import statement can spell. `_check_name` raises for anything else.
+_GROUP_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 # shared impl-internal deps -> the canonical bundle that carries them (identical bytes in every
 # bundle that includes them — the by-content module cache makes the choice immaterial).
@@ -161,11 +142,6 @@ _SHARED = {"evolution": "arithmetic", "answer": "arithmetic", "category": "arith
 
 # seam name (as declared by a bundle's manifest) -> the dotted module path that FILLS it.
 #
-# ⚠ INJECTED, NOT HARDCODED — 2026-08-02. This read `{"match": "ember.ontology.match"}`, and that one
-# line was what made the whole loader ember's. A host seam is by definition the HOST's to fill: the
-# loader's job is to resolve the name a bundle's manifest declares, not to know which host is running.
-# While the mapping was hardcoded, prism could not carry this module without importing the runner it
-# sits below, and chorus could not reach the loader at all except through ember.
 #
 # Registration is idempotent, last-writer-wins per name. A host registers its seams at boot, BEFORE the
 # first load — the same ordering rule `attach(store)` already follows. A bundle declaring a seam nobody
@@ -187,14 +163,92 @@ def registered_seams() -> Dict[str, str]:
 
 class BundleIntegrityError(RuntimeError):
     """A bundle whose content does not hash to its ref, or whose provenance fails the gate.
-    NEVER caught-and-continued into an exec: refusing to run unverified code is the point."""
+    No caller catches this and continues into an exec: unverified code does not run."""
 
 
 class BundleTrustError(BundleIntegrityError):
-    """The signature/rung leg refused a bundle (gate ON): unsigned, key not attested by the
-    author artifact, forged, or the signer's rung is below the floor. A subclass so every
-    existing refuse-path stays a refuse-path; a distinct name so 'tampered bytes' and
-    'untrusted author' are never conflated in a traceback."""
+    """The signature/rung leg raises this (gate on) for a bundle that is unsigned, whose key is
+    not attested by the author artifact, that is forged, or whose signer's rung is below the
+    floor. A subclass of BundleIntegrityError, so a caller that catches the base class catches
+    this too; a distinct name so 'tampered bytes' and 'untrusted author' are never conflated in
+    a traceback."""
+
+
+class UnknownBundleGroupError(BundleIntegrityError):
+    """Nothing carries this group: not the store, not a host-registered file, not the shipped
+    directory. A subclass of BundleIntegrityError, because a caller that stops on a bad bundle
+    stops here too, and because the two are one fact under content addressing: an unverifiable
+    payload and an absent payload both mean there is nothing here to run.
+
+    "Unknown group" means no payload was found, and the message names all three places that were
+    looked and how to supply one. A name with no bytes behind it fails before anything is
+    imported."""
+
+
+# group name -> the bundle payload FILE a host bound to it (`register_group`). The shipped
+# directory needs no such map: a payload sitting in it IS the declaration, which is the whole point
+# of discovery. This exists for the payload that lives somewhere else — a third-party tekton's
+# bundle beside its own package, a build output, a test fixture — where only the host knows the path.
+#
+# Registration is idempotent, last-writer-wins per name, exactly like `register_seam`, and it is
+# subject to the same ordering rule: register at boot, BEFORE the first load, because the first
+# successful load of a group pins it for the process.
+_HOST_GROUPS: Dict[str, Path] = {}
+
+
+def _check_name(group: str) -> str:
+    """A group name must be spellable as both a file stem and a module name (see `_GROUP_NAME`)."""
+    name = str(group)
+    if not _GROUP_NAME.match(name):
+        raise UnknownBundleGroupError(
+            "bundle group %r is not a usable name: it becomes both a filename (<group>.json) and a "
+            "module name (_agience_bundle_<group>_<sha>), so it must be a Python identifier "
+            "([A-Za-z_][A-Za-z0-9_]*)" % name)
+    return name
+
+
+def register_group(name: str, path) -> None:
+    """Declare that bundle group `name` is carried by the payload file at `path`.
+
+    The host's answer to which groups exist, and the counterpart of `register_seam`: the loader
+    holds no opinion about either. A registered path takes precedence over a same-named file in the
+    shipped directory, since the host is more specific than an ambient sibling checkout, and a store
+    bundle outranks both because that is the path with provenance behind it.
+
+    This opens no unverified path. The file is read by `_bundle_from_data`, which sha-verifies it
+    against its own manifest and checks that the payload names this group, before a single line of
+    it is compiled. A host says where to look, not what to trust.
+
+    Raises at registration when the path is not a file, so a boot-time mistake is heard at boot."""
+    group = _check_name(name)
+    p = Path(path).expanduser()
+    if not p.is_file():
+        raise FileNotFoundError(
+            "register_group(%r, %s): no such bundle payload file. Register the path of a built "
+            "`<group>.json` (agience-bundle/build_bundles.py writes them)" % (group, p))
+    _HOST_GROUPS[group] = p.resolve()
+
+
+def registered_groups() -> Dict[str, str]:
+    """The groups this host has bound to a file — a copy, so a caller cannot mutate the live map."""
+    return {k: str(v) for k, v in _HOST_GROUPS.items()}
+
+
+def known_groups() -> tuple:
+    """Every group discoverable in this process, sorted — a measurement rather than a declaration.
+
+    This is what a node can load with no store attached, which is what a health or status line, a
+    test, and `runner.GROUPS` each want. It is not the set of loadable groups: a store carrying
+    `bundle-<group>` serves a group that appears in no local file, and `load()` serves it, because
+    nothing is gated on this function. Store contents are not enumerated here because an artifact
+    store is not required to offer a listing surface."""
+    names = set(_HOST_GROUPS)
+    if _DATA_DIR is not None:
+        try:
+            names |= {p.stem for p in _DATA_DIR.glob("*.json") if _GROUP_NAME.match(p.stem)}
+        except OSError:
+            pass
+    return tuple(sorted(names))
 
 
 _lock = threading.RLock()
@@ -211,12 +265,8 @@ def attach(store) -> None:
 
 
 def _canonical(bundle: dict) -> bytes:
-    """The bytes a bundle's sha is taken over — from the CONTRACT, not reproduced here.
-
-    ⚠ THIS USED TO RESTATE THE FIELD LIST. Its own docstring said it was "build_bundles.canonical,
-    reproduced exactly … or verification means nothing" — and `build_bundles.py` no longer exists,
-    so it was a reproduction with no original to be checked against. The definition now lives in
-    `prism.crystal_model.BUNDLE_SHA_FIELDS`, beside `crystal_sha`, where a publisher can find it."""
+    """The bytes a bundle's sha is taken over — from the contract, not reproduced here.
+    A copy is a reproduction with no original to be checked against."""
     from prism.crystal_model import bundle_canonical
     return bundle_canonical(bundle)
 
@@ -234,21 +284,40 @@ def _verify_sha(bundle: dict, *, where: str) -> str:
     return actual
 
 
+def _verify_group(bundle: dict, group: str, *, where: str) -> None:
+    """The payload must SAY it is the group it was asked for.
+
+    This is the check `_verify_sha` cannot make. The sha proves a payload is internally consistent —
+    that these bytes are the bytes that were hashed — and says nothing about whether they are the
+    bytes for this name, because the name comes from outside the payload: a filename, a store
+    artifact id, or a host's `register_group` argument. Without this binding, an `install.json`
+    holding the `fetch` bundle would load a valid payload under the wrong name and every other check
+    would pass.
+
+    `group` sits inside the canonical payload the sha covers, so the check costs nothing and cannot
+    be forged separately: changing it requires re-hashing, which makes it a different bundle."""
+    claimed = bundle.get("group")
+    if claimed != group:
+        raise BundleIntegrityError(
+            "bundle at %s was asked for as group %r but its own sha-covered manifest says %r — "
+            "refusing to load a payload under a name it was not hashed under" % (where, group, claimed))
+
+
 def _gate_enabled() -> bool:
-    """Is the signature/rung leg ON? Read at call time so a test/process can flip it without a
-    reimport. A SET-but-falsey value ('0', 'false', …) is off; any other set value is ON — an
-    operator who set the variable never gets a silently-disabled gate out of a spelling."""
+    """Is the signature/rung leg on? Read at call time so a test or process can flip it without a
+    reimport. A set-but-falsey value ('0', 'false', …) is off and any other set value is on, so an
+    operator who set the variable never gets a silently-disabled gate from a spelling."""
     v = (os.environ.get("EMBER_REQUIRE_SIGNED") or "").strip().lower()
     return v not in ("", "0", "false", "no", "off")
 
 
 def _attested_signer_key(creator: dict) -> str:
-    """The signing public key the AUTHOR ARTIFACT itself attests (hex), or '' when it attests
+    """The signing public key the author artifact itself attests (hex), or '' when it attests
     none. Read from `signed_by`/`public_key` at top level or inside `context` (dict or JSON
     string — the same tolerance `prism.mass.provenance_of` extends to `context.provenance`).
-    This is what turns opsign's 'verified against the embedded key proves only
-    self-consistency' caveat into an authorship check: the key comes from the store-resolved
-    author, not from the bundle that is asking to be trusted."""
+    Taking the key from the store-resolved author rather than from the bundle asking to be trusted
+    is what makes this an authorship check: verifying against a bundle's embedded key would prove
+    only that the bundle is self-consistent."""
     holders = [creator]
     ctx = creator.get("context")
     if isinstance(ctx, str):
@@ -266,58 +335,89 @@ def _attested_signer_key(creator: dict) -> str:
     return ""
 
 
-def _check_signer_rung(rung, *, bundle_id, creator_id) -> None:
-    """The rung leg: the author's provenance rung must meet the floor.
+def _check_signer_rung(rung, *, bundle_id, creator_id, author=None, resolve=None) -> None:
+    """The provenance leg: the author must be grounded before they may author executable patterns.
 
-    `EMBER_MIN_BUNDLE_RUNG` set: a rung NAME on `prism.mass.CLAIM_LADDER`; the signer's rung
-    must sit at/above it on the ladder. An unrecognized name REFUSES — mass.py's read path
-    maps a typo to UNKNOWN because failing closed there means under-crediting; here the same
-    fallback would mean silently WEAKENING an execution gate, so the fail-closed direction
-    inverts.
+    Default, when the author artifact and a resolver are in hand: `prism.mass.grounds(author,
+    resolve)` — the author's `cited_from` must name an artifact that actually exists in this store.
 
-    Unset: the DERIVED default — the rung must weigh strictly above `prism.mass.GHOST_FLOOR`
-    ("at/below this, mass is not real"), the rung vocabulary's one existing trust floor. No
-    invented number: today this excludes exactly ASSERTION, computed from the ladder, not
-    hardcoded. Off-ladder rungs (ontology_proposal) answer a different question than "why
-    believe this author" and are refused under either branch."""
-    from prism.mass import CLAIM_LADDER, GHOST_FLOOR, Provenance, weigh
+    Grounding is resolved rather than asserted. A label such as `span_cited` passes forever, whereas
+    a citation can dangle, so the gate follows the citation to a real artifact. This is the same
+    discipline `verify_provenance` applies one step earlier — `created_by` must resolve, not merely
+    be present — extended to the author's own grounding.
 
-    min_name = (os.environ.get("EMBER_MIN_BUNDLE_RUNG") or "").strip().lower()
-    if min_name:
-        try:
-            want = Provenance(min_name)
-        except ValueError:
-            want = None
-        if want is None or want not in CLAIM_LADDER:
-            raise BundleTrustError(
-                "EMBER_MIN_BUNDLE_RUNG=%r is not a rung on prism.mass.CLAIM_LADDER (%s) — "
-                "refusing to ground %r: a mis-set floor may not weaken the gate"
-                % (min_name, ", ".join(r.value for r in CLAIM_LADDER), bundle_id))
-        if rung not in CLAIM_LADDER or CLAIM_LADDER.index(rung) > CLAIM_LADDER.index(want):
-            raise BundleTrustError(
-                "store bundle %r: signer %r is on rung %r, below the required %r "
-                "(EMBER_MIN_BUNDLE_RUNG) — refusing to ground"
-                % (bundle_id, creator_id, rung.value, want.value))
-        return
-    if rung not in CLAIM_LADDER or weigh(rung).mass <= GHOST_FLOOR:
+    `has_referent(rung)` is the fallback when no resolver was supplied, so a caller holding only a
+    channel string still gets the label check. It is the weaker of the two paths; the resolver path
+    is the strong one, and it treats UNKNOWN and HYPOTHESIS as ungrounded, same as any other author
+    that fails to resolve.
+
+    `EMBER_BUNDLE_CHANNELS` names an explicit comma-separated set of `prism.mass.Provenance` values
+    to require instead. It is a set rather than a floor, matching the shape of what it overrides. An
+    unrecognized name raises here, rather than mapping to UNKNOWN as `provenance_of` does:
+    `provenance_of` maps a typo to UNKNOWN because failing closed there leaves an artifact
+    ungrounded, whereas the same fallback here would weaken an execution gate, so the fail-closed
+    direction inverts.
+
+    `EMBER_MIN_BUNDLE_RUNG` raises rather than being reinterpreted. It named a floor on an ordering
+    this gate does not use, and reading it as a set would change what a deployed configuration means
+    without anyone touching it, so a stale environment fails loudly."""
+    from prism.mass import Provenance, grounds, has_referent
+
+    stale = (os.environ.get("EMBER_MIN_BUNDLE_RUNG") or "").strip()
+    if stale:
         raise BundleTrustError(
-            "store bundle %r: signer %r rung %r weighs at/below prism.mass.GHOST_FLOOR — a "
-            "ghost may not author executable patterns (derived default floor; set "
-            "EMBER_MIN_BUNDLE_RUNG to a prism.mass.CLAIM_LADDER rung name to tighten)"
+            "EMBER_MIN_BUNDLE_RUNG=%r is set, but it named a floor on prism.mass.CLAIM_LADDER, "
+            "which no longer exists — refusing to ground %r rather than reinterpret a trust "
+            "setting. Use EMBER_BUNDLE_CHANNELS (comma-separated Provenance names) instead."
+            % (stale, bundle_id))
+
+    want_names = [n.strip().lower() for n in
+                  (os.environ.get("EMBER_BUNDLE_CHANNELS") or "").split(",") if n.strip()]
+    if want_names:
+        want = set()
+        for name in want_names:
+            try:
+                want.add(Provenance(name))
+            except ValueError:
+                raise BundleTrustError(
+                    "EMBER_BUNDLE_CHANNELS names %r, which is not a prism.mass.Provenance (%s) — "
+                    "refusing to ground %r: a mis-set gate may not weaken it"
+                    % (name, ", ".join(p.value for p in Provenance), bundle_id))
+        if rung not in want:
+            raise BundleTrustError(
+                "store bundle %r: signer %r is on channel %r, not in the required set %s "
+                "(EMBER_BUNDLE_CHANNELS) — refusing to ground"
+                % (bundle_id, creator_id, getattr(rung, "value", rung),
+                   sorted(p.value for p in want)))
+        return
+    if resolve is not None:
+        if grounds(author, resolve) is None:
+            raise BundleTrustError(
+                "store bundle %r: author %r is not grounded — its `cited_from` is absent, "
+                "self-anchored, or names an artifact that does not resolve in this store. An "
+                "executable pattern needs an author something actually stands behind (channel was "
+                "%r; set EMBER_BUNDLE_CHANNELS to gate on channels instead)"
+                % (bundle_id, creator_id, getattr(rung, "value", rung)))
+        return
+    if not has_referent(rung):
+        raise BundleTrustError(
+            "store bundle %r: signer %r is on channel %r, which has no checkable referent — "
+            "nothing grounds this author, so they may not author executable patterns (set "
+            "EMBER_BUNDLE_CHANNELS to an explicit set of prism.mass.Provenance names to override)"
             % (bundle_id, creator_id, getattr(rung, "value", rung)))
 
 
 def verify_provenance(doc: dict, bundle: dict, store) -> None:
-    """TRUST GATE (see module header). Runs for STORE-sourced bundles, after the sha check.
+    """Trust gate (see module header). Runs for store-sourced bundles, after the sha check.
 
-    Always: the bundle artifact must name a `created_by` that RESOLVES in the store — an
-    executable pattern with no resolvable author is refused (provenance needs authority).
+    Always: the bundle artifact must name a `created_by` that resolves in the store, because an
+    executable pattern's authority comes from its provenance — one with no resolvable author has
+    none.
 
     When `EMBER_REQUIRE_SIGNED` is on, the signature/rung leg (the Higgs rule) additionally
     requires: a valid `opsign.sign_bundle` envelope, the signing key attested by the resolved
     author artifact, and the author's rung at/above the floor (`_check_signer_rung`).
-
-    Raise to refuse; never soften to a warning."""
+    This always raises; it never softens to a warning."""
     creator = (doc.get("created_by") or "").strip()
     if not creator:
         raise BundleIntegrityError(
@@ -367,12 +467,16 @@ def verify_provenance(doc: dict, bundle: dict, store) -> None:
         raise BundleTrustError(
             "store bundle %r: %s — refusing to ground" % (doc.get("id"), why))
 
-    _check_signer_rung(provenance_of(resolved), bundle_id=doc.get("id"), creator_id=creator)
+    # The author artifact and the store's resolver both go in: grounding is checked against the
+    # store, not read off a label. `arts.get_artifact` is the same resolver that established
+    # `created_by` above, so both legs of "provenance needs authority" resolve through one door.
+    _check_signer_rung(provenance_of(resolved), bundle_id=doc.get("id"), creator_id=creator,
+                       author=resolved, resolve=arts.get_artifact)
 
 
 def _bundle_from_store(group: str):
-    """The store's bundle artifact for `group`, verified — or None when absent. A PRESENT but
-    unverifiable bundle raises (loud), it never silently falls back to the shipped copy."""
+    """The store's bundle artifact for `group`, verified — or None when absent. A present but
+    unverifiable bundle raises loudly — it never silently falls back to the shipped copy."""
     store = _attached_store
     if store is None:
         return None
@@ -388,27 +492,48 @@ def _bundle_from_store(group: str):
         return None
     bundle = json.loads(raw) if isinstance(raw, str) else dict(raw)
     _verify_sha(bundle, where="store artifact %s" % doc.get("id"))
+    _verify_group(bundle, group, where="store artifact %s" % doc.get("id"))
     verify_provenance(doc, bundle, store)
     return bundle
 
 
+def _bundle_file(group: str) -> Optional[Path]:
+    """The file carrying this group: what the host registered, else the shipped `<group>.json`.
+
+    A registered path is returned even if it has since vanished, so that a missing host payload
+    fails by name in `_bundle_from_data` rather than being substituted by a same-named shipped
+    file."""
+    p = _HOST_GROUPS.get(group)
+    if p is not None:
+        return p
+    if _DATA_DIR is not None:
+        p = _DATA_DIR / (group + ".json")
+        if p.is_file():
+            return p
+    return None
+
+
 def _bundle_from_data(group: str) -> dict:
-    if _DATA_DIR is None:
-        # Say WHICH of the two sources failed and how to supply the second. "no bundle" alone sent
-        # a previous reader looking for a corrupt file that was simply not there.
-        raise BundleIntegrityError(
-            "no bundle for group %r: it is not in the store, and no shipped bundle directory was "
-            "found. Bundle payloads live in `agience-bundle/bundles/` — set AGIENCE_BUNDLE_ROOT to "
-            "that directory (or to the agience-bundle checkout). There is deliberately no copy "
-            "inside ember: a second copy of a content-addressed payload can drift from the one the "
-            "mesh carries, and the sha gate would then verify the wrong bytes faithfully." % group)
-    path = _DATA_DIR / (group + ".json")
-    if not path.exists():
-        raise BundleIntegrityError(
-            "no bundle for group %r: not in the store and %s is missing (bundle payloads are "
-            "`agience-bundle`'s — built there from chorus definitions)" % (group, path))
+    path = _bundle_file(group)
+    if path is None:
+        # Name all three places that were looked and how to supply each, so the message separates
+        # "nothing carries this" from "the payload here is corrupt".
+        raise UnknownBundleGroupError(
+            "no bundle for group %r. A group EXISTS when its sha-verified payload does, so this is "
+            "the whole answer: the store has no `bundle-%s` artifact, no host registered a file for "
+            "it, and %s. Supply it by building `agience-bundle/bundles/%s.json` (add the group to "
+            "bundle_spec.json and run build_bundles.py), by publishing a `bundle-%s` artifact, or by "
+            "calling prism.runner.register_group(%r, path) at boot. Discoverable here: %s. "
+            "There is deliberately no in-package copy to fall back to: a second copy of a "
+            "content-addressed payload can drift from the one the mesh carries, and the sha gate "
+            "would then verify the wrong bytes faithfully."
+            % (group, group,
+               ("no shipped bundle directory was found — set AGIENCE_BUNDLE_ROOT to one"
+                if _DATA_DIR is None else "%s is missing" % (_DATA_DIR / (group + ".json"))),
+               group, group, group, ", ".join(known_groups()) or "(nothing)"))
     bundle = json.loads(path.read_text(encoding="utf-8"))
     _verify_sha(bundle, where=str(path))
+    _verify_group(bundle, group, where=str(path))
     return bundle
 
 
@@ -419,7 +544,7 @@ _RELATIVE_IMPORT = re.compile(r"(?m)^\s*from\s+\.")
 
 class _SourceLoader(importlib.abc.Loader):
     """Execs one bundle module from its distributed source. Modules whose source has no
-    relative imports are shared BY CONTENT across bundles (module header: identity follows
+    relative imports are shared by content across bundles (module header: identity follows
     content); modules with relative imports bind to their bundle package and never share."""
 
     def __init__(self, source: str, share_key: Optional[str]):
@@ -445,12 +570,12 @@ class _SourceLoader(importlib.abc.Loader):
 
 
 class _SeamLoader(importlib.abc.Loader):
-    """Fills a DECLARED host seam with the ember module that implements it (store machinery,
+    """Fills a declared host seam with the ember module that implements it (store machinery,
     not operator code). Resolved lazily — only when the bundle actually imports the seam.
 
     The import machinery stamps the alias name onto whatever module create_module returns
     (init_module_attrs rewrites __spec__/__name__/__package__/__loader__), which would corrupt
-    the REAL ember module's identity — its own relative imports then warn and resolve by luck.
+    the real ember module's identity — its own relative imports then warn and resolve by luck.
     exec_module restores the host module's original attributes; the bundle still sees it under
     the alias via sys.modules."""
 
@@ -499,15 +624,21 @@ class _BundleFinder(importlib.abc.MetaPathFinder):
 
 
 def _load_group(group: str) -> dict:
-    if group not in GROUPS:
-        raise KeyError("unknown bundle group %r (groups: %s)" % (group, ", ".join(GROUPS)))
+    # No membership precheck: the sources are the answer, and a group with no payload in any of them
+    # raises `UnknownBundleGroupError` from `_bundle_from_data` before anything is compiled. The
+    # name is still checked for being spellable, because it reaches both a path and a module name.
+    group = _check_name(group)
     with _lock:
         info = _loaded.get(group)
         if info is not None:
             return info
         bundle, origin = _bundle_from_store(group), "store"
         if bundle is None:
-            bundle, origin = _bundle_from_data(group), "shipped"
+            # "host" and "shipped" are told apart because `loaded()` is a published stat: a node
+            # reporting "shipped" while actually running a payload the host pointed elsewhere would
+            # be reporting the wrong provenance of the bytes it is executing.
+            bundle = _bundle_from_data(group)
+            origin = "host" if group in _HOST_GROUPS else "shipped"
         sha = bundle["sha256"]
         pkg = "_agience_bundle_%s_%s" % (group, sha[:12])
         if pkg not in sys.modules:
@@ -541,28 +672,37 @@ def register_fns(group: str) -> list:
 
 def loaded() -> dict:
     """What is pinned in this process: {group: {"sha256", "origin"}} — a published stat, so
-    health/status can SAY which bundle a node is actually running."""
+    health/status can say which bundle a node is actually running."""
     with _lock:
         return {g: {"sha256": i["sha256"], "origin": i["origin"]}
                 for g, i in _loaded.items()}
 
 
 def __getattr__(name: str):
-    """PEP 562: `from .runner import arithmetic` / `from .runner import evolution` reads as the
-    old sibling import did, and resolves through the single distribution path."""
-    if name in GROUPS or name in _SHARED:
+    """PEP 562: `from .runner import arithmetic` / `from .runner import evolution` reads as a plain
+    sibling import and resolves through the single distribution path.
+
+    `GROUPS` is served here too, as the live measurement `known_groups()`, so the name every caller
+    reads (ember re-exports it) tracks the payloads actually present. A dunder name raises first,
+    before any lookup, because the import machinery and pytest probe for `__path__`, `__wrapped__`,
+    `__bases__` and friends, and none of those should cost a directory listing or a bundle load."""
+    if name.startswith("__"):
+        raise AttributeError("module 'prism.runner' has no attribute %r" % name)
+    if name == "GROUPS":
+        return known_groups()
+    if name in _SHARED or name in known_groups():
         return load(name)
     raise AttributeError("module 'prism.runner' has no attribute %r" % name)
 
 
 def _log_gate_state() -> None:
-    """The honest breadcrumb, once at runner init: the flagged seam's state is SAID, not
+    """The honest breadcrumb, once at runner init: the flagged seam's state is said, not
     discoverable only by reading env. The gate itself still reads env at call time."""
     raw = os.environ.get("EMBER_REQUIRE_SIGNED")
     if _gate_enabled():
-        log.info("bundle signature gate ON (EMBER_REQUIRE_SIGNED=%s; floor: %s)",
-                 raw, os.environ.get("EMBER_MIN_BUNDLE_RUNG")
-                 or "derived — signer rung must weigh above prism.mass.GHOST_FLOOR")
+        log.info("bundle signature gate ON (EMBER_REQUIRE_SIGNED=%s; channels: %s)",
+                 raw, os.environ.get("EMBER_BUNDLE_CHANNELS")
+                 or "derived — signer channel must satisfy prism.mass.has_referent")
     elif raw is None:
         log.info("bundle signature gate OFF (EMBER_REQUIRE_SIGNED unset) — flagged seam")
     else:

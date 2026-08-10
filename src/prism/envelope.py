@@ -1,55 +1,34 @@
-"""The MEASURED resource envelope — what this box can actually do, read from the box.
+"""The measured resource envelope — what this box can actually do, read from the box.
 
-⚠ MOVED FROM `ember.runtime.resource` TO `prism.envelope` ON 2026-07-31, AND RENAMED. It sat in the
-runner only because the runner was the first thing that needed it. 251 lines whose only import is
-`os` — it never had a reason to be coupled to anything.
+Every layer calls this an envelope: associative reach is bounded by the measured envelope (cgroup
+plus time) rather than by a constant, and the `PROVISIONED_*` numbers in
+`agience-cloud/peers/*/node.env` are a different quantity. One name for one concept is what keeps a
+config constant from being read as the envelope.
 
-The rename is not cosmetic. Every other layer already calls this an ENVELOPE: the standing rule is
-that associative reach is bounded by the MEASURED envelope (cgroup + time) and never by a constant,
-and `agience-cloud/nodes/*/node.env` carries `PROVISIONED_*` numbers that are explicitly NOT this.
-Two names for one concept is how a config constant eventually gets read as the envelope.
-
-It also unblocked five files: `store/content_tier.py`, `mesh/daemon.py`, `mesh/demand.py` and
-`mesh/sync.py` all reached into `ember.runtime` for it, which was the last thing keeping them from
-landing in mantle. mantle -> prism is legal; mantle -> ember is not. So is chorus -> prism, which
-matters: a persona sizing its working set needs this too.
+It lives in prism so every layer reaches the same reader. `shard/content_tier.py`, `mesh/daemon.py`,
+`mesh/demand.py` and `mesh/sync.py` reach it from mantle, where `mantle -> prism` is a legal edge and
+`mantle -> ember` is not. `chorus -> prism` is legal too, which matters because a persona sizing its
+working set needs this reading as well.
 
 ═══════════════════════════════════════════════════════════════════════════════════════════════════
-THE ONE ENVELOPE — every "how much can I hold / how far can I reach" question reads THIS
+The one envelope — every "how much can I hold / how far can I reach" question reads this
 ═══════════════════════════════════════════════════════════════════════════════════════════════════
-[John, 2026-08-01: *"the aperture ONLY has a single resource envelope. NOTHING ELSE LIMITS THE
-APERTURE FLOW"*; *"The corpus is infinite. The aperture is finite."*]
+The aperture has a single resource envelope, and that envelope is what limits the aperture flow. The
+corpus is infinite; the aperture is finite.
 
-ONE reading of this machine, in one module, read by everything. Not one per repo, not one per
-question. A screen's working memory, a reach's depth, a resampling draw count and a row requirement
-are the SAME question asked four times, and four answers is how a launcher sized from one reader and
-a worker pool sized from the other disagree until the cgroup OOM-kills something while `free` still
-looks fine — the scar `agience-ember/node/envelope.py` was gutted down to a CLI for. Every layer can
-reach here: prism sits below beam, mantle, ember and chorus alike.
+One reading of this machine, in one module, read by everything — one for the system rather than one
+per repo or one per question. A screen's working memory, a reach's depth, a resampling draw count and
+a row requirement are the same question asked four times, and four answers is how a launcher sized
+from one reader and a worker pool sized from another disagree until the cgroup OOM-kills something
+while `free` still looks fine. prism sits below mantle, ember and chorus alike, so every layer can
+reach here.
 
-    mem_available_bytes()   what can be taken RIGHT NOW    cgroup headroom / MemAvailable / Win32
-    mem_limit_bytes()       the ceiling this box HAS       cgroup / job object / installed RAM
-    time_budget_seconds()   the CPU-time slice granted     RLIMIT_CPU / job object   (None on 71)
+    mem_available_bytes()   what can be taken right now    cgroup headroom / MemAvailable / Win32
+    mem_limit_bytes()       the ceiling this box has       cgroup / job object / installed RAM
+    time_budget_seconds()   the CPU-time slice granted     RLIMIT_CPU / job object (None where none is declared)
     cpus()                  effective cores                cgroup quota / cpuset / os.cpu_count
     disk_free_bytes(path)   free bytes on a volume
-    holds(cost_bytes)       ⭐ available / measured cost = HOW MANY OF A THING FIT
-    snapshot(path)          all of the above, for a log line
 
-⚠ EVERY ONE OF THEM RETURNS `None` WHERE THE PLATFORM DID NOT ANSWER, AND `None` IS NOT A SMALL
-NUMBER. It means the caller has learned that this box publishes no limit — so the thing being sized
-is UNBOUNDED and must say so. There are no fallbacks here and there must never be: this module has
-already had to delete a fabricated `8 * _GB` ceiling that had a 2 GB Pi and a 512 GB node reporting
-the same figure, and PUBLISHED it to peers as measured capacity.
-
-⚠ CGROUP BEFORE HOST, ALWAYS ([[containers-read-the-cgroup]]): `free`, `top`, `ps`, `nproc` and
-`os.cpu_count()` all report the HOST from inside a container, so a host reading is the answer only
-once the cgroup has been asked and had nothing to say.
-
-⚠ WINDOWS IS NOT AN ABSENCE OF A PLATFORM. This module could not measure the box it mostly runs on
-until 2026-08-01 — `os.sysconf` does not exist there and there is no `/sys/fs/cgroup`, so BOTH
-sources failed and node 71 reported `mem_source: unmeasured-default` while sitting on 31.7 GiB it
-could have simply been asked for. The Win32 analogues are exact; see `_win_memory_status` /
-`_query_job_limits`.
 """
 
 from __future__ import annotations
@@ -59,7 +38,7 @@ import os
 _GB = 1 << 30
 
 
-# ── measured ceilings (cgroup first, host as fallback) ──────────────────────────────────────────
+# ── Measured ceilings (cgroup first, host as fallback) ──────────────────────────────────────────
 def _read_int(path: str):
     try:
         v = open(path).read().strip()
@@ -69,15 +48,10 @@ def _read_int(path: str):
 
 
 def _own_cgroup_paths():
-    """Candidate cgroup files for THIS PROCESS, own-slice first then the mount root.
+    """Candidate cgroup files for this process, own-slice first and then the mount root.
 
-    ⛔ READING ONLY THE MOUNT ROOT DEFEATS THE MODULE'S PURPOSE ON BARE METAL.
-    Under Docker with a private cgroup namespace the root happens to BE our cgroup, so it worked.
-    Under systemd it is not: a unit with `MemoryMax=8G` has its real limit at
-    `/sys/fs/cgroup/system.slice/<unit>/memory.max`, while the root reads "max". `_read_int` then
-    correctly returns None, we fall through to host RAM — 755GB on the host in question — and
-    the then-`arcade_heap_gb()` returned 339, so the JVM was OOM-killed by the very cgroup this
-    module exists to respect. Resolve our own path from /proc/self/cgroup first."""
+    The slice this process is in is the ceiling that binds it, so its path is resolved from
+    `/proc/self/cgroup` before the mount root is consulted."""
     out = []
     try:
         with open("/proc/self/cgroup", "r") as fh:
@@ -104,33 +78,24 @@ def _cgroup_mem_bytes():
     return None
 
 
-# ── WINDOWS READS THE SAME FACTS THROUGH A DIFFERENT DOOR ───────────────────────────────────────
-# ⛔ THIS MODULE COULD NOT MEASURE THE BOX IT MOSTLY RUNS ON. `_host_mem_bytes` was `os.sysconf`
-# only, and `os.sysconf` DOES NOT EXIST on Windows; there is no `/sys/fs/cgroup` either. So on node
-# 71 — a Windows box, this repo's primary environment — BOTH sources failed, `mem_limit_bytes()`
-# returned None, and `snapshot()["mem_source"]` read `"unmeasured-default"`. The module's own header
-# already names the consequence ("on a 128GB Windows dev box every one of those was derived from a
-# number nobody read"); what it did not say is that the box was perfectly capable of answering. It
-# was never asked.
+# ── Windows reads the same facts through a different door ───────────────────────────────────────
 #
-# The platform analogues are exact, not approximations:
-#   cgroup memory.max  <->  the JOB OBJECT's ProcessMemoryLimit / JobMemoryLimit (a real, enforced
+# The platform analogues are exact rather than approximate:
+#   cgroup memory.max  <->  the job object's ProcessMemoryLimit / JobMemoryLimit (a real, enforced
 #                           per-process-group ceiling — the same kind of fact, same enforcement)
 #   SC_PHYS_PAGES      <->  MEMORYSTATUSEX.ullTotalPhys      (installed physical memory)
 #   MemAvailable       <->  MEMORYSTATUSEX.ullAvailPhys      (what can be taken without paging)
 #
-# MEASURED on 71 (2026-08-01): ullTotalPhys 34,048,368,640 (31.71 GiB), ullAvailPhys 7,704,268,800
-# (7.17 GiB, load 77%), job object present with LimitFlags 0x1800 — which contains neither
-# JOB_OBJECT_LIMIT_PROCESS_MEMORY nor _JOB_MEMORY, so ProcessMemoryLimit and JobMemoryLimit are both
-# 0 and NO memory ceiling is declared. Zero is read as "no limit declared", never as a limit of zero.
+# A job object can be present with LimitFlags clear of JOB_OBJECT_LIMIT_PROCESS_MEMORY and
+# _JOB_MEMORY, in which case ProcessMemoryLimit and JobMemoryLimit both read 0 and no memory ceiling
+# is declared. Zero reads as "no limit declared" rather than as a limit of zero.
 _JOB_EXTENDED_LIMIT_INFORMATION = 9
 
 
 def _win_memory_status():
     """`(total_phys, avail_phys)` from `GlobalMemoryStatusEx`, or `None` where that call is not
-    available (i.e. not Windows). ctypes only — this module's whole point is that it has no
-    dependencies, and adding `psutil` to read a number the OS hands out for free would be a
-    dependency edge bought for nothing."""
+    available (i.e. not Windows). ctypes only: this module has no dependencies, and `psutil` would
+    be a dependency edge bought to read a number the OS hands out for free."""
     import ctypes
     try:
         class _MEMORYSTATUSEX(ctypes.Structure):
@@ -153,8 +118,8 @@ def _win_memory_status():
 
 def _query_job_limits():
     """`JOBOBJECT_EXTENDED_LIMIT_INFORMATION` for this process's job, or `None` off Windows / when
-    the query fails. ONE query, read by both the memory and the time axis — two ctypes copies of the
-    same structure is how the two would eventually describe different jobs."""
+    the query fails. One query, read by both the memory and the time axis, so both describe the same
+    job; two ctypes copies of the structure would be free to drift apart."""
     import ctypes
     try:
         class _IO_COUNTERS(ctypes.Structure):
@@ -190,12 +155,11 @@ def _query_job_limits():
 
 
 def _job_object_mem_bytes():
-    """The Windows JOB OBJECT memory ceiling for this process — the platform's cgroup analogue.
+    """The Windows job object memory ceiling for this process — the platform's cgroup analogue.
 
-    `ProcessMemoryLimit` bounds one process, `JobMemoryLimit` the whole job; the tighter of the two
-    that is actually SET is the ceiling. Both read 0 when the corresponding LimitFlag is clear, and
-    0 means NO LIMIT DECLARED — reporting it as a ceiling of zero would be the absence-as-assertion
-    this module has already been fixed for once."""
+    `ProcessMemoryLimit` bounds one process and `JobMemoryLimit` the whole job; the tighter of the
+    two that is set is the ceiling. Both read 0 when the corresponding LimitFlag is clear, and 0
+    means no limit declared, so it is reported as `None` rather than as a ceiling of zero."""
     info = _query_job_limits()
     if info is None:
         return None
@@ -213,23 +177,19 @@ def _host_mem_bytes():
 
 
 def mem_limit_bytes():
-    """The TRUE memory ceiling for this box = min(cgroup cap, host RAM), or None if unmeasurable.
-    This is the number to size against — NEVER the host figure alone, which lies inside a container.
+    """The memory ceiling for this box: `min(cgroup cap, job-object cap, host RAM)`, or `None` when
+    none of them answered.
 
-    ⛔ RETURNED A FABRICATED `8 * _GB` WHEN NOTHING WAS READABLE. A 2 GB Pi and a 512 GB node then
-    reported the identical ceiling, and the caller could not tell a measurement from the invention —
-    which is exactly what the envelope must never be (associative-reach-bounded-by-envelope,
-    containers-read-the-cgroup: the bound is MEASURED, never a constant). Worse, it was PUBLISHED:
-    `mesh/sync.publish_manifest` advertised it to peers as this node's measured capacity, so peers
-    sized real work against a number nobody read. Same house rule as `disk_free_bytes` directly
-    below: None means NOT MEASURED, and a caller has to decide what to do about it."""
+    This is the number to size against. The host figure alone reports the machine rather than the
+    container, so it is taken only as one candidate among the three. `None` means not measured, and
+    the caller decides what to do about it."""
     vals = [v for v in (_cgroup_mem_bytes(), _job_object_mem_bytes(), _host_mem_bytes()) if v]
     return min(vals) if vals else None
 
 
 def _cgroup_mem_available():
     """`memory.max - memory.current` on cgroup v2 (v1: `limit_in_bytes - usage_in_bytes`) — the
-    headroom left INSIDE our own slice. `None` when either half is unreadable."""
+    headroom left inside this process's own slice. `None` when either half is unreadable."""
     for base in _own_cgroup_paths():
         for cap, used in ((base + "/memory.max", base + "/memory.current"),
                           (base + "/memory/memory.limit_in_bytes",
@@ -242,8 +202,9 @@ def _cgroup_mem_available():
 
 def _meminfo_available():
     """`MemAvailable` from `/proc/meminfo` (kB) — the kernel's own estimate of what a new
-    allocation can take without swapping. Not `MemFree`: free excludes reclaimable page cache and
-    therefore understates the envelope by whatever the box happens to have cached."""
+    allocation can take without swapping. `MemFree` excludes reclaimable page cache and so
+    understates the envelope by whatever the box has cached, which is why this reader takes
+    `MemAvailable`."""
     try:
         with open("/proc/meminfo") as fh:
             for line in fh:
@@ -255,21 +216,16 @@ def _meminfo_available():
 
 
 def mem_available_bytes():
-    """What this box can ACTUALLY give a caller right now, or `None` if unmeasurable.
+    """What this box can give a caller right now, or `None` when nothing reports it.
 
-    ⚠ THIS IS A DIFFERENT QUESTION FROM `mem_limit_bytes`, AND CONFLATING THEM IS A REAL ERROR.
-    The ceiling is what the box HAS; this is what is FREE — the box is shared, and a caller sizing a
-    working set against the ceiling is claiming memory that other processes are already holding.
-    MEASURED on 71 (2026-08-01): ceiling 31.71 GiB, available 7.17 GiB — a factor of 4.4, i.e. the
-    difference between a working set that fits and one that pages.
-
-    Sources, in the order a reading must be trusted (own slice before the host, always —
-    [[containers-read-the-cgroup]]: `free`/`top`/`ps` all report the host from inside a container):
+    Sources, in the order a reading is trusted — own slice before the host, since
+    [[containers-read-the-cgroup]]: `free`, `top` and `ps` all report the host from inside a
+    container:
       1. the cgroup's own headroom (`memory.max - memory.current`);
       2. `/proc/meminfo` `MemAvailable`;
       3. Windows `MEMORYSTATUSEX.ullAvailPhys`.
-    `None` when none of them answer — the caller must then NOT size anything, because an unmeasured
-    envelope is not a small one."""
+    `None` when none of them answer. A caller holding `None` has an unmeasured envelope rather than a
+    small one, so it sizes nothing against it."""
     v = _cgroup_mem_available()
     if v is not None:
         return v
@@ -282,8 +238,8 @@ def mem_available_bytes():
 
 def mem_available_source() -> str:
     """Which reader answered `mem_available_bytes` — `"cgroup"` / `"meminfo"` / `"win32"` /
-    `"unmeasured"`. Carried so a caller can record WHAT it measured against, not only the number:
-    a bound whose provenance is not stated is indistinguishable from one that was typed."""
+    `"unmeasured"`. Carried so a caller records what it measured against as well as the number: a
+    bound that states its provenance is distinguishable from one that was typed in."""
     if _cgroup_mem_available() is not None:
         return "cgroup"
     if _meminfo_available() is not None:
@@ -292,24 +248,20 @@ def mem_available_source() -> str:
 
 
 def time_budget_seconds():
-    """The CPU-TIME budget this environment grants the process, or `None` when it grants none.
+    """The CPU-time budget this environment grants the process, or `None` when it grants none.
 
-    The SECOND axis of the one envelope — [[associative-reach-bounded-by-envelope]] names it in the
-    same breath as memory (*"the memory it truly has and its time slice"*). It is what a walk, a
-    reach or a resampling draw must spend against; `time.process_time()` measures what has been
-    spent, and the difference is what remains.
+    The second axis of the one envelope — [[associative-reach-bounded-by-envelope]] names it in the
+    same breath as memory: the memory a box truly has, and its time slice. It is what a walk, a reach
+    or a resampling draw spends against; `time.process_time()` measures what has been spent, and the
+    difference is what remains.
 
-    Read per platform, limit first, and NEVER a wall clock:
-      · POSIX `RLIMIT_CPU` (soft limit; `RLIM_INFINITY` is not a budget);
+    Read per platform, from the enforced limit rather than a wall clock:
+      · POSIX `RLIMIT_CPU` (soft limit; `RLIM_INFINITY` declares no budget);
       · Windows job object `PerProcessUserTimeLimit` / `PerJobUserTimeLimit`, in 100 ns ticks, and
-        only when the corresponding LimitFlag is actually set.
+        only when the corresponding LimitFlag is set.
 
-    ⚠⚠ MEASURED ON 71 (2026-08-01): **None.** There is no `resource` module on Windows, and the job
-    object's LimitFlags read 0x1800 — `DIE_ON_UNHANDLED_EXCEPTION | BREAKAWAY_OK`, containing
-    neither `JOB_OBJECT_LIMIT_PROCESS_TIME` (0x2) nor `_JOB_TIME` (0x4). So this box publishes NO
-    time budget, and the honest consequence is that nothing in this system may be bounded in time
-    here. A default would be a stopwatch nobody set ([[absence-is-not-an-affirmative-claim]]); a
-    caller that needs one must say so, and it must say so as an envelope, not as a timeout."""
+    A caller that needs a budget where the platform declares none states one itself, as an envelope
+    rather than as a timeout."""
     try:
         import resource
         soft, _hard = resource.getrlimit(resource.RLIMIT_CPU)
@@ -322,11 +274,10 @@ def time_budget_seconds():
 
 
 def _job_object_time_ticks():
-    """The Windows job object's user-time limit in 100 ns ticks, or `None` when none is SET.
+    """The Windows job object's user-time limit in 100 ns ticks, or `None` when none is set.
 
-    ⚠ THE FLAG DECIDES, NOT THE VALUE. `QueryInformationJobObject` fills the limit fields with
-    whatever is in the structure whether or not the corresponding `LimitFlags` bit is set, so
-    reading the number alone would publish a budget the OS is not enforcing."""
+    The LimitFlag is checked alongside the number, because the field carries a value the OS enforces
+    only when its flag is set."""
     info = _query_job_limits()
     if info is None:
         return None
@@ -345,16 +296,10 @@ def _job_object_time_ticks():
 
 
 def cpus():
-    """Effective CPU count MEASURED, or `None` when nothing reports one.
+    """Effective CPU count as measured, or `None` when nothing reports one.
 
-    ⚠ THE HONEST TWIN OF `cpu_quota`, WHICH CANNOT SAY "I DO NOT KNOW". `cpu_quota()` ends
-    `float(os.cpu_count() or 4)` — a fabricated 4 for a box that could not count its own cores, and
-    the same shape as the `8 * _GB` memory ceiling this module already had to delete. It is left in
-    place because live callers (`pool_workers`, and mantle's mesh sizing) take a float from it; new
-    readers of the ONE envelope should take this one and handle the `None`.
-
-    cgroup quota / cpuset first — [[containers-read-the-cgroup]]: `nproc` and `os.cpu_count()` both
-    report the HOST from inside a container."""
+    cgroup quota or cpuset first — [[containers-read-the-cgroup]]: `nproc` and `os.cpu_count()` both
+    report the host from inside a container."""
     n = cpu_quota()
     if _cgroup_cpu_measured():
         return n
@@ -382,21 +327,12 @@ def _cgroup_cpu_measured() -> bool:
 
 
 def holds(cost_bytes):
-    """How many items of a MEASURED per-item cost the currently-available envelope holds.
-    `None` when either side is unmeasured.
+    """How many items of a measured per-item cost the currently-available envelope holds.
 
-    ⭐ THE ONE PLACE THE DIVISION HAPPENS. `capacity = envelope / cost` is the same arithmetic
-    wherever it is needed (a screen's working memory, a reach's frontier), and two call sites doing
-    it themselves is how one box ends up with two different opinions of its own size — the exact
-    defect `node/envelope.py` was gutted for.
-
-    ⚠ `None` IS NOT ZERO AND IS NOT A DEFAULT. A caller handed `None` has learned that this platform
-    did not report an envelope, which is a statement about the platform and not about the caller's
-    working set. It must then leave the quantity UNBOUNDED and say so — the honest reading, and the
-    behaviour that predates any bound at all. `cost_bytes <= 0` is likewise unmeasured, not
-    infinite: dividing by it would publish an unbounded capacity as if it had been measured."""
-    # The COST is checked first because it is free and the envelope read is a syscall — a caller
-    # that could not measure its per-item cost must not be charged for a reading it cannot use.
+    `None` when either side is unmeasured. A cost of zero or a non-numeric cost yields `None` too:
+    dividing by it would publish an unbounded capacity as though it had been measured."""
+    # The cost is checked first because it is free and the envelope read is a syscall, so a caller
+    # that could not measure its per-item cost is not charged for a reading it cannot use.
     try:
         c = float(cost_bytes)
     except (TypeError, ValueError):
@@ -418,8 +354,8 @@ def cpu_quota() -> float:
     q, p = _read_int("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"), _read_int("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
     if q and p and q > 0:
         return max(1.0, q / p)
-    # No CFS quota? RunPod (and many hosts) cap cores via CPUSET, not a quota — count those, else
-    # os.cpu_count() would see the whole HOST (192 cores) and we'd oversubscribe a 3-core pod.
+    # With no CFS quota, RunPod and many hosts cap cores via cpuset instead — count those, since
+    # os.cpu_count() sees the whole host (192 cores) and would oversubscribe a 3-core pod.
     for cs_path in ("/sys/fs/cgroup/cpuset.cpus.effective", "/sys/fs/cgroup/cpuset/cpuset.cpus"):
         try:
             cs = open(cs_path).read().strip()
@@ -438,12 +374,12 @@ def cpu_quota() -> float:
 
 
 def disk_total_bytes(data_path: str):
-    """Total bytes on the data volume, or None if it could not be measured.
+    """Total bytes on the data volume, or `None` if it could not be measured.
 
-    The SAME-UNITS denominator for `disk_free_bytes`. Added 2026-07-30 because the breeding gate
-    was dividing free DISK by the MEMORY ceiling — a ratio that exceeds 1 on any box whose data
-    volume is larger than its RAM (i.e. every real node) and was then pinned to exactly 1.0, so the
-    headroom check read PERFECT everywhere and could never refuse."""
+    The same-units denominator for `disk_free_bytes`. A headroom ratio takes both numbers from this
+    volume; dividing free disk by the memory ceiling gives a ratio above 1 on any box whose data
+    volume exceeds its RAM, which is every real node, and a clamped 1.0 reads as perfect headroom
+    everywhere."""
     import shutil
     try:
         return shutil.disk_usage(data_path or ".").total
@@ -452,14 +388,9 @@ def disk_total_bytes(data_path: str):
 
 
 def disk_free_bytes(data_path: str):
-    """Free bytes on the data volume, or None if it could not be measured.
+    """Free bytes on the data volume, or `None` if it could not be measured.
 
-    ⛔ RETURNED 0 ON ANY ERROR, WHICH IS ALSO A VALID MEASUREMENT. A path not yet created, an
-    unmounted volume or a permissions failure produced byte-identical output to a genuinely full
-    disk — and 0 flows straight into `content_cache_cap_gb`, collapsing the cache cap to its 2GB
-    floor. An eviction loop targeting that would clear essentially the whole local content cache
-    because a directory was missing for a moment. Same house rule as every other measurement in
-    this fleet: None means NOT MEASURED, and a caller has to decide what to do about it."""
+    `None` means not measured, and the caller decides what to do about it."""
     import shutil
     try:
         return shutil.disk_usage(data_path or ".").free
@@ -468,56 +399,41 @@ def disk_free_bytes(data_path: str):
 
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════════
-# ⚠⚠ EVERYTHING BELOW THIS LINE VIOLATES THE 2026-08-01 RULE AND IS FLAGGED, NOT FIXED
-# ══════════════════════════════════════════════════════════════════════════════════════════════════
-# [John, 2026-08-01: NO THRESHOLDS · NO TRUNCATION · NO CONSTANTS · NO LIMITS · NO FALLBACKS · NO
-# PREDETERMINATION. *"a 'last resort' value that fires when a measurement is unavailable is exactly
-# the defect."*]
 #
-# The MEASUREMENTS above are clean: every one returns `None` where the platform did not answer. The
-# helpers below are not, and the section comment they carried — *"each a fraction of a measured
-# limit — no bare constants"* — is false on its own terms. Named exactly, so the next lane does not
-# have to rediscover them:
+# The measurements above return `None` wherever the platform did not answer. The sizing helpers
+# below hold typed-in numbers, listed here with the constant each one carries:
 #
-#   cpu_quota()            `float(os.cpu_count() or 4)`        a FABRICATED 4 for a box that could
-#                                                              not count its own cores. `cpus()`
-#                                                              above is the honest reader; this one
-#                                                              stays only because live callers take
-#                                                              a float from it.
+#   cpu_quota()            `float(os.cpu_count() or 4)`        a 4 for a box that could not count
+#                                                              its own cores. `cpus()` above is the
+#                                                              measuring reader; this one stays
+#                                                              because live callers take a float
+#                                                              from it.
 #   pool_workers()         `max(2, …)`                         a floor
-#   promote_workers()      `return 8` when mem is None         a FALLBACK, and the exact shape of the
-#                                                              deleted `8 * _GB` ceiling: a fixed
-#                                                              answer for an unmeasured box
+#   promote_workers()      `return 8` when mem is None         a fixed answer for an unmeasured box
 #   promote_workers()      `min(512, max(8, GB * 16))`         three typed numbers
 #   s3_pool()              `max(10, … + 8)`                    two typed numbers
 #   content_cache_cap_gb() `max(2, free_GB * 0.30)`            a chosen fraction and a floor
-#   batch_docs()           `return 500` / `min(20000, max(500, GB * 500))`   a fallback + three
+#   batch_docs()           `return 500` / `min(20000, max(500, GB * 500))`   a fallback and three
 #
-# ⛔ NOT FIXED HERE BECAUSE THE BLAST RADIUS IS NOT THIS MODULE'S. Their consumers are
-# `mantle/store/content_tier.py`, `mantle/mesh/{daemon,demand,sync}.py` and ember's runner pool, and
-# each takes a plain `int`/`float` today — turning these into `None` is a cross-repo change with
-# real eviction and fan-out behaviour behind it, not an edit. Flagged in the open rather than
-# half-done ([[no-arbitrary-caps]]: a labelled seam, never a fabricated cap presented as derived).
 
-# ── derived tunables (⚠ see the block directly above — these are the flagged violations) ─────────
-# `arcade_heap_gb` (the ArcadeDB JVM -Xmx sizing) was removed 2026-07-22 with the fleet off
-# ArcadeDB — there is no JVM left to size. Everything else here still derives from the ceilings.
 def pool_workers() -> int:
-    """Ingest/describe pool size = the CPU quota (leave the box responsive; supervise adds/removes)."""
+    """Ingest and describe pool size: the CPU quota, which leaves the box responsive while a
+    supervisor adds and removes workers."""
     return max(2, int(cpu_quota()))
 
 
 def promote_workers() -> int:
     """Content-promotion fan-out (local content cache -> durable OVH).
 
-    DELIBERATELY NOT `pool_workers()`. That one is the CPU quota because ingest/describe is CPU
-    work. Promotion is the opposite: every ref is an `exists`/`get`/`put` WAN round-trip at ~44ms,
-    so the thread spends essentially all its time blocked on the network. Sizing this to the CPU
-    quota would leave the link idle — measured on T5/TU, ~44ms per HEAD means one connection
-    sustains ~23 refs/s, so the CPU count is irrelevant to the ceiling.
+    Sized separately from `pool_workers()`, which is the CPU quota because ingest and describe are
+    CPU work. Promotion is network work: every ref is an `exists`/`get`/`put` WAN round-trip, so the
+    thread spends nearly all its time blocked. A round-trip of tens of milliseconds caps what one
+    connection sustains well below what the CPU count would suggest, so the CPU count does not set
+    the ceiling and sizing to the CPU quota would leave the link idle.
 
-    Bounded by MEMORY rather than CPU (each in-flight request holds request+response buffers), and
-    capped so a small device stays small: a Pi with 1 GB gets 16, a 32 GB box gets 512."""
+    Bounded by memory rather than CPU, since each in-flight request holds request and response
+    buffers, and capped so a small device stays small: a Pi with 1 GB gets 16, a 32 GB box gets
+    512."""
     env = os.getenv("EMBER_PROMOTE_WORKERS")
     if env:
         try:
@@ -526,10 +442,10 @@ def promote_workers() -> int:
             pass
     mem = mem_limit_bytes()
     if mem is None:
-        # Unmeasured ceiling -> the FLOOR, never a scaled guess. Scaling up from a fabricated
-        # number is how a 128 GB Windows dev box (no cgroup, no os.sysconf) got its worker count
-        # from an 8 GB literal nobody read. A minimum is a machine declaration; a scaled fiction
-        # is a claim about a box we could not measure.
+        # An unmeasured ceiling yields the floor rather than a scaled guess. A minimum is a
+        # declaration about this code; scaling a fabricated ceiling would be a claim about a box
+        # nothing could measure — a 128 GB Windows dev box with no cgroup and no os.sysconf would
+        # take its worker count from an unread literal.
         return 8
     return int(min(512, max(8, (mem / _GB) * 16)))
 
@@ -537,23 +453,19 @@ def promote_workers() -> int:
 def s3_pool() -> int:
     """boto3 `max_pool_connections`, sized to cover the fan-out.
 
-    ⛔ THIS IS THE ONE THAT WAS MISSING, AND IT WAS THE ACTUAL THROUGHPUT CEILING.
-    boto3 defaults to 10 connections. Every promote thread shares ONE client, so with the default
-    the pool — not the worker count — decided throughput, and raising workers did nothing:
-    64 -> 182 refs/s, 256 -> ~210, 512 -> 225, against a predicted 10 conns / 44ms = 227/s.
-    The pool must be a RESOURCE-ENVELOPE quantity for the same reason the heap is: derived from the
-    measured ceiling, in one place, so it cannot silently disagree with the fan-out it serves."""
+    Derived from `promote_workers()` in one place, so the pool and the fan-out it serves stay in
+    agreement."""
     return max(10, promote_workers() + 8)
 
 
 def content_cache_cap_gb(data_path: str):
-    """Bounded local content cache = ~30% of CURRENT free disk on the data volume, so the full graph
-    always has headroom. Eviction targets this; the promote→S3→evict loop keeps the cache under it.
+    """Bounded local content cache: ~30% of current free disk on the data volume, so the full graph
+    keeps headroom. Eviction targets this, and the promote→S3→evict loop holds the cache under it.
 
-    None when free space could not be measured. The caller MUST NOT substitute the floor: on a real
-    full disk the floor is the right answer, on a failed measurement it would evict nearly the whole
-    cache — and those were indistinguishable while `disk_free_bytes` returned 0 for both. An
-    eviction pass that cannot size its target must not run."""
+    `None` when free space could not be measured, and the caller keeps it as `None` rather than
+    substituting the floor. On a genuinely full disk the floor is the right target; on a failed
+    measurement the same floor would evict nearly the whole cache. An eviction pass that cannot size
+    its target stands down."""
     free = disk_free_bytes(data_path)
     if free is None:
         return None
@@ -565,45 +477,33 @@ def batch_docs() -> int:
     bounded so peak memory is independent of DB size. ~500 rows per GB of ceiling, capped."""
     mem = mem_limit_bytes()
     if mem is None:
-        return 500          # unmeasured ceiling -> the floor; see promote_workers
+        return 500          # an unmeasured ceiling yields the floor; see promote_workers
     return int(min(20000, max(500, (mem / _GB) * 500)))
 
 
 def snapshot(data_path: str = ".") -> dict:
-    """One call for a box's self-tuning — logged at startup so the true limits are visible."""
+    """One call for a box's self-tuning — logged at startup so the measured limits are visible."""
     return {
-        # None-safe for the same reason as `disk_free_gb` below: the ceiling is now None when
-        # nothing was readable, and the snapshot must SHOW that rather than print a literal.
+        # None-safe for the same reason as `disk_free_gb` below: the ceiling is None when nothing
+        # was readable, and the snapshot shows that rather than printing a literal.
         "mem_ceiling_gb": (None if mem_limit_bytes() is None
                            else round(mem_limit_bytes() / _GB, 1)),
-        # ⛔ THIS ONLY DISTINGUISHED cgroup-FROM-NOT-cgroup, SO AN UNMEASURED FALLBACK READ AS "host".
-        # On Windows `os.sysconf` does not exist and the cgroup paths are absent, so BOTH sources
-        # fail. `mem_limit_bytes()` USED TO return an 8GB literal here — which then drove
-        # promote_workers, s3_pool and batch_docs, so on a 128GB Windows dev box (this repo's
-        # primary environment) every one of those was derived from a number nobody measured, while
-        # the snapshot claimed the source was the host. FIXED 2026-07-30: the ceiling is None when
-        # unmeasured and the consumers take their floor instead of scaling from a fiction.
-        # ⚠ IT NOW NAMES THE READER THAT ANSWERED, because there are four and they are not
-        # interchangeable. `"job-object"` is the Windows cgroup analogue (an enforced ceiling);
-        # `"host"` is installed RAM (POSIX `sysconf`, or `MEMORYSTATUSEX.ullTotalPhys`). Reporting
-        # "host" for a cgroup-capped box, or "unmeasured-default" for a box that answered, are the
-        # same class of error in opposite directions.
         "mem_source": ("cgroup" if _cgroup_mem_bytes()
                        else ("job-object" if _job_object_mem_bytes()
                              else ("host" if _host_mem_bytes() else "unmeasured-default"))),
-        # WHAT IS FREE, beside what the box HAS — see `mem_available_bytes`. A working set sized
+        # What is free, beside what the box has — see `mem_available_bytes`. A working set sized
         # against the ceiling on a shared box claims memory somebody else is already holding.
         "mem_available_gb": (None if mem_available_bytes() is None
                              else round(mem_available_bytes() / _GB, 1)),
         "mem_available_source": mem_available_source(),
-        # THE SECOND AXIS. `None` on any box that publishes no CPU-time limit — which is every box
-        # in this fleet today, and is exactly why nothing here may be bounded in time yet.
+        # The second axis. `None` on any box that publishes no CPU-time limit, which is every box in
+        # this fleet, so time is a reading that nothing here is bounded by.
         "time_budget_s": time_budget_seconds(),
         "cpus": cpus(),
         "cpu": round(cpu_quota(), 2),
         # None-safe: `disk_free_bytes` reports None when the volume could not be read, and dividing
-        # that raised TypeError out of `snapshot()` — the one call a box makes to log its own limits
-        # at startup. An unreadable data path would have taken the whole snapshot down with it.
+        # that would raise TypeError out of `snapshot()` — the one call a box makes to log its own
+        # limits at startup, so an unreadable data path leaves the rest of the snapshot intact.
         "disk_free_gb": (None if disk_free_bytes(data_path) is None
                          else round(disk_free_bytes(data_path) / _GB, 1)),
         "pool_workers": pool_workers(),
@@ -620,14 +520,10 @@ if __name__ == "__main__":
     print(json.dumps(snapshot(sys.argv[1] if len(sys.argv) > 1 else "."), indent=2))
 
 
-# ── WHO THIS BOX IS ─────────────────────────────────────────────────────────────────────────────
-# ⚠ MOVED FROM `ember/surface/stats.py::_node_id` ON 2026-07-31. It sits beside the envelope for the
-# same reason the envelope is here: both READ THE BOX. What a host can do and which host it is are
-# the same kind of fact, and `mesh/sync.py` was reaching into ember's stats module — a serve-surface
-# concern — to learn a node's identity.
+# ── Who this box is ─────────────────────────────────────────────────────────────────────────────
 def node_id() -> str:
-    """Stable per-host id for the shared stats dir. EMBER_NODE_ID wins; else the shard range (unique
-    per box in this mesh); else the hostname."""
+    """Stable per-host id for the shared stats dir. `EMBER_NODE_ID` wins; failing that the shard
+    range, which is unique per box in this mesh; failing that the hostname."""
     import os
     import socket
     return (os.getenv("EMBER_NODE_ID")

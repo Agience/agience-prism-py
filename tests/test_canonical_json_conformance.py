@@ -1,17 +1,10 @@
-"""Canonical JSON is canonical ACROSS SDKs — the property all content-addressing rests on.
+"""Canonical JSON is canonical across SDKs — the property all content-addressing rests on.
 
 `prism-c/src/json.cpp:1-4` promises canonical output "makes signatures and content hashes reproducible
 across all three SDKs". A sha is only a stable cross-environment ref if every SDK turns the same logical
 structure into the same bytes.
 
-RESOLVED 2026-07-29 (John: **"Always canonical and RFC"** → RFC 8785 / JCS: raw UTF-8, everywhere).
-Python used to call `json.dumps` without `ensure_ascii=False` and so escaped non-ASCII to `\\uXXXX`,
-producing different bytes — and a different sha256 — from prism-c (`json.cpp:44`, UTF-8 passthrough) and
-from `ember/runner.py`, which already conformed. All canonicalisers now set the flag; the workspace gate
-`agience-bundle/deploy/canonical_json_check.py` fails on any new `json.dumps` that omits it.
-
-These tests were previously a `strict=True` xfail pinning the defect. It XPASSed the moment the fix
-landed — which is exactly what a strict xfail is for — so it is now a plain conformance suite.
+RFC 8785 / JCS: raw UTF-8, everywhere.
 """
 import json
 

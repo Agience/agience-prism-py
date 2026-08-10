@@ -1,7 +1,6 @@
 """AgienceClient plane routing: artifact OPERATIONS dispatch through Crystal (the
 content-type gateway); raw CRUD + search stay on Mantle. Mirrors facet + the JS
 server so every caller agrees on which plane owns a path.
-
 Pure unit tests — httpx.AsyncClient is monkeypatched, no network."""
 
 import asyncio

@@ -6,14 +6,17 @@ add your operators, deploy it anywhere, and point the platform at its URL
 over the wire — you never import core.
 
 Run:
-    pip install agience-prism-py uvicorn
+    pip install "agience-prism-py[host]"
     python examples/host/host_template.py            # serves on :8083
+
+The `host` extra carries fastapi, uvicorn, httpx and pyjwt. `from prism import Host`
+resolves only once it is installed.
 """
 from prism import Host
 from pydantic import BaseModel
 
 # api_key=... to require a bearer (proxy URLs are public — set one in prod).
-# Pass AGIENCE_API_URI + AGIENCE_TOKEN to self-register with the platform on start.
+# Pass MANTLE_URI + AGIENCE_TOKEN to self-register with the platform on start.
 host = Host("my-host")
 
 

@@ -1,0 +1,68 @@
+{
+  "_comment": "THE GROUP KEY DERIVATION and THE SEALED ENVELOPE, pinned. A browser extension is a first-class node on the plane, so both halves must reproduce under WebCrypto.",
+  "_warning": "`root_hex` is bytes(range(32)) \u2014 published test material. It is not a key and must never be one.",
+  "root_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "derivation": {
+    "_algorithm": "HKDF-SHA256, salt=None (RFC 5869 default: a zero-filled string of hash length, i.e. 32 zero bytes), info=UTF-8 of 'comms:group:<group>', 32 bytes out.",
+    "_webcrypto": "crypto.subtle.importKey('raw', root, 'HKDF', false, ['deriveBits']) then deriveBits({name:'HKDF', hash:'SHA-256', salt:new Uint8Array(32), info:new TextEncoder().encode('comms:group:'+group)}, key, 256)",
+    "vectors": [
+      {
+        "group": "fleet",
+        "key_hex": "017f253fb7617fe2cf9566e6ccb54045d2285b1db606aee58dd1a8d37e0efd6c",
+        "info": "comms:group:fleet"
+      },
+      {
+        "group": "ops",
+        "key_hex": "e0c42130f692b2c7f8351641fa2dc51d8cf3833318be9141694b7bd6812b2bb6",
+        "info": "comms:group:ops"
+      },
+      {
+        "group": "group/with/slashes",
+        "key_hex": "0447c0c6124836d3b13623ab66294af91a2d958ec168effb5c35f76488e58e51",
+        "info": "comms:group:group/with/slashes"
+      },
+      {
+        "group": "\u00fc\u00f1\u00ee",
+        "key_hex": "2f8013d8e5a5c62f3ebca878b2903ca8ea0c7affa45b573c5255309e51922ae2",
+        "info": "comms:group:\u00fc\u00f1\u00ee"
+      },
+      {
+        "group": "",
+        "key_hex": "2394551845ca9f5a2c6d4a9e8aa81c92376621f6a06c794438661d25bf2e01b7",
+        "info": "comms:group:"
+      }
+    ]
+  },
+  "envelope": {
+    "_format": "base64url(b'BSL1' + nonce(12) + AES-256-GCM ciphertext with 16-byte tag appended), AAD = the target artifact id as UTF-8.",
+    "_replaces": "Fernet (until 2026-08-04) \u2014 AES-128-CBC + HMAC-SHA256 in a bespoke container that no browser implements, which put the whole edge profile out of reach.",
+    "_webcrypto": "crypto.subtle.decrypt({name:'AES-GCM', iv:nonce, additionalData:aad, tagLength:128}, key, ciphertext)",
+    "_note": "The envelope is NOT pinned by a fixed string: the nonce is random per seal, so a pinned ciphertext would only pin the nonce. The derivation above is what a second implementation needs to match; the envelope is verified by decrypting these.",
+    "sealed_examples": [
+      {
+        "group": "fleet",
+        "aad": "fleet",
+        "signal": {
+          "kind": "ping",
+          "n": 1
+        },
+        "sealed": "QlNMMbBnAfLtQrCfsnMG-_hCfywrhsjm4Ue2l-eigwiClM-onYT-afdGK7afzVWRUscNU9A=",
+        "opens_to_signal": true
+      },
+      {
+        "group": "ops",
+        "aad": "ops",
+        "signal": {
+          "msg": "hello",
+          "list": [
+            1,
+            2,
+            3
+          ]
+        },
+        "sealed": "QlNMMZ1iNkB2sY5PHEcL6_rdixv4gMEbfr4j1aR5wyCyF8KGXhTXTE16-1EwLxRDR4sZLn9ef33pg2dD1WI=",
+        "opens_to_signal": true
+      }
+    ]
+  }
+}

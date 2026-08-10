@@ -1,8 +1,8 @@
-"""The prism junction MEASURES reach instead of testing membership.
+"""The prism junction measures reach instead of testing membership.
 
 The load-bearing test here is `test_a_family_near_miss_does_not_satisfy_the_gate`: measuring reach
-must NOT quietly widen what may activate. Until discharge is authorized by a grant on the energy
-(NEXT.md §Q), a near miss is information for the refusal, never permission.
+does not widen what may activate. Until discharge is authorized by a grant on the energy (NEXT.md
+§Q), a near miss is information, not permission.
 """
 from prism.crystal_model import activates_on, capability_reach, required_capabilities
 
@@ -19,8 +19,8 @@ def test_exact_match_is_zero_hops():
 
 
 def test_a_family_neighbour_is_reported_at_one_hop():
-    """The crystal wants a thermometer; the prism affords a camera. Both are `sensor.*`, so the
-    refusal can now say WHAT is nearby instead of just naming a missing string."""
+    """The crystal wants a thermometer; the prism affords a camera. Both are `sensor.*`, so a
+    non-match can name what is nearby instead of only a missing string."""
     [m] = capability_reach(["sensor.temperature"], ["sensor.capture", "fs.read"])
     assert m["basis"] == "family"
     assert m["matched"] == "sensor.capture"
@@ -48,16 +48,15 @@ def test_one_entry_per_requirement_in_order():
     assert [m["basis"] for m in got] == ["exact", "family", None]
 
 
-# ── the gate did NOT move ─────────────────────────────────────────────────────
+# ── the gate is unchanged ──────────────────────────────────────────────────────
 
 def test_a_family_near_miss_does_not_satisfy_the_gate():
-    """THE guarantee of this change: reach is measured and reported, permission is unchanged.
-    A prism affording `sensor.capture` still does NOT activate a crystal requiring
-    `sensor.temperature` — loosening the match before discharge is grant-authorized would be a
-    straight widening of the permission surface."""
+    """Reach is measured and reported, but permission is unchanged: a prism affording
+    `sensor.capture` does not activate a crystal requiring `sensor.temperature`. Loosening the
+    match before discharge is grant-authorized would widen the permission surface."""
     c = _crystal("sensor.temperature")
     assert capability_reach(required_capabilities(c), ["sensor.capture"])[0]["basis"] == "family"
-    assert not activates_on(c, ["sensor.capture"])          # measured as near — still refused
+    assert not activates_on(c, ["sensor.capture"])          # measured as near — still does not activate
 
 
 def test_gate_still_requires_every_capability_exactly():

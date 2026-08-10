@@ -1,56 +1,41 @@
-"""Operator signing — WHO authored this behaviour, verifiable by anyone, independent of who served it.
+"""Operator signing — who authored this behaviour, verifiable by anyone, independent of who served it.
 
 This is the integrity half of AGENT-HOST-DESIGN.md D10/D12: bundles are reached in peer mantles and
-cached, never installed, so a node must be able to verify an operator it did not author and did not
-fetch from its author. Signing gives exactly that and nothing more.
+cached rather than installed, so a node verifies an operator it did not author and did not fetch
+from its author. Signing gives exactly that:
 
-⚠ WHAT A SIGNATURE DOES AND DOES NOT BUY — state it plainly, because the difference decides whether
-the rest of the design is sound:
+  * It attests authorship and integrity. This spec is the one that author published, unmodified.
+  * It says nothing about what the operator does. A validly-signed operator can be hostile.
 
-  * IT ATTESTS AUTHORSHIP AND INTEGRITY. This spec is the one that author published, unmodified.
-  * IT SAYS NOTHING ABOUT WHAT THE OPERATOR DOES. A validly-signed operator can be hostile.
-
-So a signature NEVER authorizes execution on its own. Admission is: verify signature -> check the
-EFFECT CONTRACT against what this host offers -> and for code-backed operators, a sandbox. Declarative
-operators are safe not because they are signed but because they can only invoke capabilities the host
-already published (D12). Signing tells you who to blame; the capability model is what limits harm.
+Admission is therefore a separate, wider decision: verify the signature -> check the effect contract
+against what this host offers -> and for code-backed operators, a sandbox. A declarative operator is
+safe because it can invoke only capabilities the host already published (D12). Signing tells you who
+to blame; the capability model is what limits harm.
 
 ## What is signed
 
-`canonical_operator()` covers the EXECUTABLE CONTENT and the CONTRACT — `id`, `kind`, `spec`,
-`requires`, `effects` — and deliberately nothing else. Excluded, with reasons:
+`canonical_operator()` covers the executable content and the contract — `id`, `kind`, `spec`,
+`requires`, `effects` — and nothing else. Excluded, with reasons:
 
-  * fitness counters (`invocations`, `verified`, …) — these ACCRUE LOCALLY and differ per node. If
+  * fitness counters (`invocations`, `verified`, …) — these accrue locally and differ per node. If
     they were signed, every invocation would invalidate the signature.
   * `created_time`, `state` — lifecycle, not behaviour.
-  * `context`/`content`/`lemmas` — the human-facing offer text. ⚠ NOTE THIS IS A REAL TRADE-OFF:
-    the offer is how an operator is DISCOVERED (need->offer match), so an unsigned offer means a
-    relay could re-describe an operator to make it match needs it should not. That is a
-    discoverability attack, not an execution one — the spec still cannot change — and closing it
-    means signing the offer too, at the cost of re-signing on every wording edit. Flagged, not
-    hidden; revisit when cross-origin sharing is real (D11).
+  * `context`/`content`/`lemmas` — the human-facing offer text.
 
-## Draft is enforced by the ABSENCE of a signature
+## A draft is an operator with no signature
 
-Publishing IS commit + canonicalize + hash + sign. A draft simply has no signature, so it cannot be
-admitted anywhere — no separate visibility flag, and it fails closed by construction.
+Publishing is commit + canonicalize + hash + sign. A draft carries no signature, so it is
+inadmissible everywhere by construction — one state, no separate visibility flag.
 
-⚠ MOVED HERE FROM `ember/identity/opsign.py` — 2026-08-02, the chorus→ember DAG work. Behaviour
-unchanged; only the address did. It was never ember's, and the imports proved it: measured at the move
-this module reached `cryptography`, `prism.canonical` and `prism.crystal_model` and **nothing from
-ember at all**. It sat in the runner's repo because the runner was its loudest caller, not because it
-was the runner's concern.
-
-Why `prism.trust` specifically, rather than origin (identity) or a new home:
-  * The `trust` extra is already declared as *"sign/verify, keys"* and already carries
-    `cryptography>=42` — this module needs exactly that and adds no new dependency.
-  * What is signed here is an OPERATOR and a BUNDLE — crystal-shaped artifacts whose canonical form
-    (`prism.crystal_model.bundle_canonical`) and content addressing already live in prism. Signing them
-    from anywhere else puts the signer on one side of the DAG and the thing it canonicalizes on the
-    other.
-  * It is NOT user identity, which is the concern-map reason it does not go to origin: origin answers
-    *who is this principal*; this answers *who authored this behaviour*. And prism is a pure leaf, so
-    the bundle loader that verifies signatures (`prism.runner`) reaches it without an upward edge.
+Why this lives in `prism.trust`:
+  * The `trust` extra is declared as *"sign/verify, keys"* and carries `cryptography>=42` — this
+    module needs exactly that and adds no dependency.
+  * What is signed is an operator or a bundle — crystal-shaped artifacts whose canonical form
+    (`prism.crystal_model.bundle_canonical`) and content addressing already live in prism, so the
+    signer sits beside the thing it canonicalizes.
+  * prism is a pure leaf, so the bundle loader that verifies signatures (`prism.runner`) reaches it
+    without an upward edge. Origin answers *who is this principal*; this answers *who authored this
+    behaviour*.
 """
 from __future__ import annotations
 
@@ -67,7 +52,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 from prism.canonical import canonical_string as _jcs_string
 
 # The fields that constitute the operator's behaviour and its contract. Order is irrelevant —
-# `canonical_operator` sorts — but the SET is the security boundary, so it is named in one place.
+# `canonical_operator` sorts — but the set is the security boundary, so it is named in one place.
 SIGNED_FIELDS = ("id", "kind", "spec", "requires", "effects")
 
 
@@ -86,13 +71,11 @@ def canonical_operator(doc: Dict[str, Any]) -> bytes:
 
 def authority_key(keys_dir, *, create: bool = False
                   ) -> Tuple[Optional[Ed25519PrivateKey], Optional[Ed25519PublicKey]]:
-    """This node's operator-signing key, persisted at `<keys_dir>/operator.key`.
+    """This node's operator-signing key, persisted as raw Ed25519 bytes at `<keys_dir>/operator.key`.
 
-    ⛔ `create` DEFAULTS TO FALSE, AND THAT IS DELIBERATE. `content.py` records what happens
-    otherwise: `_content_key` minted a fresh key on the READ path when the file was absent, which
-    silently partitioned the node from the fleet while every health metric stayed green. A verify
-    path must never mint a key — a missing key is "I cannot verify", never "here is a new identity".
-    Signing (a write) may create; verification (a read) may not.
+    Returns `(private, public)`. An existing file is loaded. When there is none, `create=True`
+    generates and persists one (mode 0600 where the OS supports it) and `create=False` returns
+    `(None, None)`, so a verify-only node can ask without minting an identity.
     """
     kp = Path(keys_dir) / "operator.key"
     if kp.exists():
@@ -114,13 +97,13 @@ def authority_key(keys_dir, *, create: bool = False
 
 def sign_bytes(canonical: bytes, priv: Ed25519PrivateKey) -> str:
     """Ed25519 over already-canonical bytes → hex. The generic primitive both operators and signals
-    sign with, so there is ONE signing mechanism, not two that can drift apart."""
+    sign with, so there is one signing mechanism across both."""
     return priv.sign(canonical).hex()
 
 
 def verify_bytes(canonical: bytes, sig_hex: str, pub: Ed25519PublicKey) -> bool:
-    """True iff `sig_hex` is `pub`'s signature over `canonical`. Never raises — a malformed
-    signature is `False`, not an exception, so a caller cannot forget to catch it."""
+    """True iff `sig_hex` is `pub`'s signature over `canonical`. Total: a malformed signature
+    returns `False`, so the result is the whole answer and there is nothing to catch."""
     try:
         pub.verify(bytes.fromhex(sig_hex), canonical)
         return True
@@ -142,33 +125,17 @@ def load_public(hex_key: str) -> Optional[Ed25519PublicKey]:
 
 def sign_operator(doc: Dict[str, Any], priv: Ed25519PrivateKey, *,
                   authority: str = "") -> Dict[str, Any]:
-    """Publish: stamp the signature, the signer's public key, and the content address.
+    """Publish: stamp `signature`, `signed_by`, and `authority` when one is given. Mutates and
+    returns `doc`.
 
-    `signed_by` carries the PUBLIC KEY so a peer can verify without a key-distribution round trip;
-    `authority` names the issuing origin (D11) for the trust decision that sits ABOVE verification.
-    Verifying the signature proves authorship — deciding whether that author is trusted is a
-    separate question this function does not answer."""
+    `signed_by` carries the public key so a peer can verify without a key-distribution round trip;
+    `authority` names the issuing origin (D11) for the trust decision that sits above verification.
+    Verifying the signature proves authorship; whether that author is trusted is a separate
+    question, answered by the caller's trust gate."""
     doc["signature"] = priv.sign(canonical_operator(doc)).hex()
     doc["signed_by"] = public_key_hex(priv.public_key())
     if authority:
         doc["authority"] = authority
-    # ⛔ `spec_hash` IS NO LONGER STAMPED (2026-07-30). EVERYTHING IS AN ARTIFACT — and this was a
-    # SECOND, WEAKER content address stored beside one the artifact already has.
-    #
-    # Measure it against what it sat next to: `canonical_operator` covers
-    # {id, kind, spec, requires, effects} and is bound by an Ed25519 signature, while `spec_hash`
-    # digests only (kind, spec) — a strict SUBSET of the signed payload. It therefore protected
-    # nothing the signature did not already protect. Note the ordering above: the signature is
-    # computed BEFORE the stamp, so it never covered `spec_hash` either.
-    #
-    # What the stored copy DID do was go stale. Being a stored derived value, it had to be
-    # re-derived whenever its canonicalizer changed — which is the entire "workspace-wide address
-    # migration" that blocked the bundle rebuild for days. And the two canonicalizers do not agree:
-    # `json.dumps(sort_keys, separators)` vs RFC 8785 differ on non-ASCII strings and on floats
-    # (`1.0` → "1.0" vs "1"). Two spellings, one operator.
-    #
-    # `evolution.spec_hash()` remains as a FUNCTION, computed on demand where fitness needs to ask
-    # "is this the same behaviour?". A value you can always recompute never needs migrating.
     return doc
 
 
@@ -176,24 +143,15 @@ def verify_operator(doc: Dict[str, Any], *, pub: Optional[Ed25519PublicKey] = No
                     ) -> Tuple[bool, str]:
     """`(ok, reason)` — is this operator authentic and internally consistent?
 
-    Checks, in order, each failing CLOSED with a distinct reason so "unsigned" is never confused
-    with "forged" and neither is confused with "valid":
-      1. a signature is present at all (absent => DRAFT, not admissible)
+    Checks, in order, each failing closed with a distinct reason so unsigned, no-verifying-key and
+    forged stay three separate outcomes:
+      1. a signature is present at all (absent => draft, and a draft is inadmissible)
       2. the signature verifies against `pub`, or against the embedded `signed_by` if none is given
 
-    ⛔ THERE IS NO LONGER A THIRD CHECK, and removing it lost nothing. It compared a STORED
-    `spec_hash` against a recomputed one "so a doc cannot advertise one content address while
-    carrying different behaviour". But `canonical_operator` — the bytes the signature binds —
-    already covers {id, kind, spec, requires, effects}, a superset of what `spec_hash` digests. A doc
-    carrying different behaviour fails check 2. So check 3 could only ever fire on a doc whose
-    signature had ALREADY verified, i.e. on an untampered doc whose stored hash was STALE — turning
-    a canonicalizer change into a fleet-wide verification failure. A stale copy of a signed value is
-    not a second opinion; it is a second thing to keep in sync.
-
-    ⚠ Verifying against the EMBEDDED key proves only self-consistency: anyone can sign anything with
-    a key they generated. It answers "was this tampered with in transit", not "do I trust the
-    author". Pass `pub` from a trusted source to answer the second question. The distinction is
-    returned in the reason string rather than hidden."""
+    On success the reason distinguishes the two strengths of the result: verified against a
+    supplied key (authorship attested) versus self-consistent against the embedded key
+    (authorship unattested). That distinction rides in the reason string rather than being
+    collapsed into the boolean."""
     sig = doc.get("signature")
     if not sig:
         return False, "unsigned (draft — publishing is commit + hash + sign)"
@@ -206,33 +164,29 @@ def verify_operator(doc: Dict[str, Any], *, pub: Optional[Ed25519PublicKey] = No
         return False, "signature does not verify (tampered, or signed by a different key)"
     return True, ("verified against a supplied key" if pub is not None
                   else "self-consistent (verified against the embedded key — authorship is "
-                       "unattested; supply a trusted key to check WHO)")
+                       "unattested; supply a trusted key to check who)")
 
 
 # ── bundles ───────────────────────────────────────────────────────────────────────────────────
 #
-# A SOURCE BUNDLE (runner.py's single distribution path) is signed with the SAME mechanism as an
+# A source bundle (runner.py's single distribution path) is signed with the same mechanism as an
 # operator — Ed25519 over canonical bytes, `signature`/`signed_by` stamped beside the content —
-# so there is ONE signing scheme, not two that can drift apart. The canonical bytes are exactly
-# the payload the bundle's sha256 already covers (`runner._canonical`: group, entry_module,
-# register_fns, host_seams, modules — build_bundles.canonical, byte for byte). Consequences:
+# so there is one signing scheme. The canonical bytes are exactly the payload the bundle's sha256
+# already covers (`runner._canonical`, which delegates to `prism.crystal_model.bundle_canonical`:
+# group, entry_module, register_fns, host_seams, modules). Consequences:
 #
-#   * signing does NOT change the sha256 — the envelope fields sit OUTSIDE the hashed payload,
+#   * signing leaves the sha256 unchanged — the envelope fields sit outside the hashed payload,
 #     exactly as an operator's `signature` sits outside `SIGNED_FIELDS`. A signed bundle is the
 #     same content-addressed artifact as its unsigned twin.
-#   * signature and sha attest the SAME bytes, so "sha verifies but signature covers something
-#     else" cannot happen — there is one canonicalization, defined once (build side), reproduced
-#     once (runner), and reused here.
-#   * like an operator, verifying against the EMBEDDED `signed_by` proves only self-consistency.
-#     WHO signed — and whether that author's rung admits execution — is the runner's trust gate
+#   * signature and sha attest the same bytes, so a bundle whose sha verifies has a signature over
+#     that same payload — one canonicalization, defined once and reused on every side.
+#   * like an operator, verifying against the embedded `signed_by` proves self-consistency. Who
+#     signed — and whether that author's rung admits execution — is the runner's trust gate
 #     (`runner.verify_provenance`), which binds the key to the store-resolved author artifact.
 
 
 def _bundle_canonical(bundle: Dict[str, Any]) -> bytes:
-    """⚠ FROM THE CONTRACT, NOT FROM THE RUNNER (2026-07-31). This reached into
-    `ember.runtime.runner._canonical` — a signing module depending on the runner's private helper
-    for the bytes it signs over. That was `identity/`'s last tie to `runtime/`, and the direction was
-    wrong anyway: what a signature covers is a contract, not a runner detail."""
+    """The bundle's canonical bytes, taken from the contract (`prism.crystal_model`)."""
     from prism.crystal_model import bundle_canonical
     return bundle_canonical(bundle)
 
@@ -241,8 +195,8 @@ def sign_bundle(bundle: Dict[str, Any], priv: Ed25519PrivateKey, *,
                 authority: str = "") -> Dict[str, Any]:
     """Publish a bundle: stamp `signature` (Ed25519 hex over the sha-canonical payload) and
     `signed_by` (the signer's public key, hex) — the operator envelope, applied to a bundle.
-    Mutates and returns `bundle`. Raises KeyError on a malformed bundle: signing garbage is a
-    caller bug, never something to paper over."""
+    Mutates and returns `bundle`. Raises KeyError on a malformed bundle, so a partial payload is
+    never signed."""
     bundle["signature"] = sign_bytes(_bundle_canonical(bundle), priv)
     bundle["signed_by"] = public_key_hex(priv.public_key())
     if authority:
@@ -252,8 +206,8 @@ def sign_bundle(bundle: Dict[str, Any], priv: Ed25519PrivateKey, *,
 
 def verify_bundle(bundle: Dict[str, Any], *, pub: Optional[Ed25519PublicKey] = None
                   ) -> Tuple[bool, str]:
-    """`(ok, reason)` — mirror of `verify_operator` for bundles, same fail-closed order:
-    unsigned, no key, and forged are three DISTINCT reasons, never conflated."""
+    """`(ok, reason)` — mirror of `verify_operator` for bundles, same fail-closed order. Unsigned,
+    no verifying key, malformed and forged each carry their own reason."""
     sig = bundle.get("signature")
     if not sig:
         return False, "unsigned (no `signature` on the bundle)"
@@ -268,26 +222,27 @@ def verify_bundle(bundle: Dict[str, Any], *, pub: Optional[Ed25519PublicKey] = N
         return False, "signature does not verify (tampered, or signed by a different key)"
     return True, ("verified against a supplied key" if pub is not None
                   else "self-consistent (verified against the embedded key — authorship is "
-                       "unattested; supply a trusted key to check WHO)")
+                       "unattested; supply a trusted key to check who)")
 
 
 def admit(doc: Dict[str, Any], *, host_offers=None, pub: Optional[Ed25519PublicKey] = None
           ) -> Tuple[bool, str]:
-    """May this node RUN this operator? Signature + capability contract + runtime, in that order.
+    """May this node run this operator? Signature + capability contract + runtime, in that order.
 
-    Admission is separate from acquisition on purpose (D10): a node routinely holds operators it
-    will not run, and an unadmitted operator stays HELD AND VISIBLE so it becomes runnable if the
-    host later gains the capability, and so the agent can say what it would need.
+    Admission is separate from acquisition (D10): a node routinely holds operators it will not run,
+    and an unadmitted operator stays held and visible, so it becomes runnable if the host later
+    gains the capability, and so the agent can say what it would need.
 
-    `host_offers` is the set of capability names this host publishes (D12). `None` means NOT
-    PROBED — which is refused rather than treated as "offers nothing", keeping the three-valued
-    discipline `resource.py` establishes: has / hasn't / didn't-probe must stay distinguishable."""
+    `host_offers` is the set of capability names this host publishes (D12). `None` means the host
+    was not probed, and yields no admission rather than being read as "offers nothing" — has,
+    hasn't, and didn't-probe stay three distinguishable states."""
     ok, why = verify_operator(doc, pub=pub)
     if not ok:
         return False, why
     if str(doc.get("kind") or "") not in ("source", "composition"):
-        # D10: code-backed operators are reachable but NOT runnable until a sandbox exists.
-        # Signing tells you who wrote it; without isolation that is a liability model, not security.
+        # D10: "source" and "composition" are the admissible kinds. A code-backed operator is
+        # reachable and held, and becomes runnable once a sandbox exists — signing names the author,
+        # and isolation is what bounds the harm.
         return False, "runtime %r is not admissible: no sandbox exists yet" % doc.get("kind")
     requires = sorted(doc.get("requires") or [])
     if not requires:

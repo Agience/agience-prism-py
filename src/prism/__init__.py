@@ -2,9 +2,8 @@
 
 Prism adapts an environment (world <-> frame) to Agience.
 Build on Agience without copyleft reaching your code: the AGPL platform is reached
-over the wire, never linked. No platform IP lives here. Two toolkits in one package
-(the former `agience-host` compute SDK + the original `agience-prism-py` MCP-server SDK,
-consolidated):
+over the wire, never linked. No platform IP lives here. Two toolkits in one package —
+a compute SDK that serves operators, and an MCP-server SDK:
 
     from prism import Host           # build a Host (compute serving operators)
     from prism import create_server  # build an MCP server
@@ -13,38 +12,51 @@ consolidated):
 The full surfaces live under ``prism.host``, ``prism.server``, and
 ``prism.trust``; the most-used names are re-exported here.
 
-⚠ THE CONTRACT IS EAGER; THE RUNTIME SURFACES ARE LAZY. THAT IS AN INSTALL CONTRACT, NOT A STYLE
-CHOICE (2026-07-30).
-
-`import prism` used to pull `.trust`, `.host` and `.server` at module scope, so it required
-python-jose, cryptography, fastapi, uvicorn, httpx and mcp — six packages — before you could read a
-single constant. That weight is why `agience-beam` refused to depend on this package and VENDORED a
-byte-identical copy of `canonical.py` instead, with `agience-bundle` doing the same for its bare
-installer: three copies of the code that decides every content address and every signature, kept in
-step by a gate, because the SDK was too heavy to import.
-
-The split removes the cause. The CONTRACT — canonical JSON, the crystal model, the capability
-vocabulary, the config shape, the error set, the structural address — is **pure stdlib with zero
-dependencies** and is imported eagerly below. The runtime surfaces resolve through PEP 562
-`__getattr__`, so `from prism import Host` still works and now fails with a message naming the extra
-you need, while `from prism.canonical import canonical_string` costs nothing.
+The contract — canonical JSON, the crystal model, the capability vocabulary, the config shape, the
+error set, the structural address — is pure stdlib with zero dependencies, and is imported eagerly
+below. The runtime surfaces resolve through PEP 562 `__getattr__`, so `from prism import Host`
+works and fails with a message naming the extra you need, while `from prism.canonical import
+canonical_string` costs nothing.
 
     pip install agience-prism            # the contract. no dependencies.
     pip install agience-prism[trust]     # + jose, cryptography  — sign/verify
     pip install agience-prism[host]      # + fastapi, uvicorn    — serve operators
     pip install agience-prism[server]    # + mcp, httpx          — MCP server
+    pip install agience-prism[wire]      # + numpy, cryptography — carry signals
     pip install agience-prism[all]
 
-⚠ DO NOT ADD AN EAGER IMPORT OF host/server/trust HERE. `agience-beam` imports `prism.canonical`
-directly now, and importing a submodule runs THIS file first — so one eager import would put fastapi
-on the fiber's install path and the vendored copy deleted to get here would have to come back.
-`agience-prism/py/tests/test_contract_install_is_pure.py` fails if it does.
+The wire lives here too: reach · plane · streams · carriers · frames · propagation · mcp_bridge ·
+schema · demurrage · minting · settlement · pump · minhash · error_threshold · extraction ·
+conservation. The members that need numpy or cryptography are covered by `[wire]`; the rest import
+on the bare install. The aperture — the entroptics instrument — is reached by injection
+(`prism.instrument`), never by import: entroptics is private, and a published SDK depends only on
+packages its consumers can install.
 """
 from __future__ import annotations
 
+# ── The BLAS thread pin — must run before numpy is imported, or it is inert ──────────────────────
+# `prism.vector` calls `numpy.linalg.norm`, and OpenBLAS sizes its worker pool when the library
+# loads under `import numpy`, so setting the variable afterwards does nothing (unset -> 8 threads,
+# set-before -> 1, set-after -> 8, read back through `threadpoolctl`). Python initialises parent
+# packages before submodules, so this line runs before `prism.vector`'s numpy import and covers it.
+# `os` is stdlib, so the zero-dependency contract above is untouched.
+#
+# Why 1: two threads in `numpy.linalg.eigh` fault this box's OpenBLAS on 3 runs of 3 (exit 139) and
+# can hang instead of faulting, so one green run proves little; pinned, 0 of 3. `norm` is a level-1
+# call and not itself the observed fault, but the pin is applied per-package rather than per-routine
+# on purpose: a hand-maintained list of "which LAPACK entry points are safe enough" is exactly the
+# typed-in knowledge that goes stale silently.
+#
+# `setdefault` leaves an operator's exported value in place, including one that reinstates the
+# fault, and the pin reaches only processes that import prism before numpy.
+import os as _os
+
+_os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+del _os
+
 from typing import Any
 
-# ── THE CONTRACT — pure stdlib, always importable ───────────────────────────────────────────────
+# ── The contract — pure stdlib, always importable ───────────────────────────────────────────────
 from .environment import Capability, Prism, PRISM_CONTENT_TYPE
 from .errors import (
     AuthError,
@@ -84,10 +96,8 @@ _LAZY: dict[str, tuple[str, str]] = {
 def __getattr__(name: str) -> Any:
     """Resolve a runtime surface on first use (PEP 562).
 
-    ⚠ THE ERROR MESSAGE IS HALF THE VALUE. Without this wrapper, `prism.Host` on a contract-only
-    install raises `ModuleNotFoundError: No module named 'fastapi'` — naming a package the caller
-    never asked for and saying nothing about what to do. Re-raising with the extra named turns a
-    confusing traceback into an instruction."""
+    An unknown name raises AttributeError. A name whose submodule needs an uninstalled extra raises
+    ImportError naming the extra to install, so the traceback reads as an instruction."""
     try:
         submodule, extra = _LAZY[name]
     except KeyError:

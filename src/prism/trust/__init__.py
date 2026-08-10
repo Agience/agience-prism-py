@@ -8,16 +8,25 @@ never the reverse.
 
     from prism.trust import service_identity, authority_trust, key_manager
     from prism.trust import sign_service_jwt, verify_jwt
+    from prism.trust import ServerAuth              # the per-persona host adapter
+    from prism.trust.scopes import parse_scope      # the claim vocabulary
 
-Deliberately NOT a dependency of Mantle — the database verifies tokens via a thin
+Mantle stands outside this package: the database verifies tokens through a thin
 issuer+JWKS seam and never signs, so it stays application-agnostic.
+
+**Verification is a contract; issuance is a service.** Verifying a token and reading a scope string
+are pure functions of bytes plus an on-disk key, identical in every deployment and needed by every
+consumer, so they live here. OIDC, WebAuthn, key custody and the delegation-token endpoint are
+stateful and per-deployment: they live in Origin and are reached over the wire at `ORIGIN_URI`.
+Each module's docstring states which side of that line it is on.
 """
-from . import authority_trust, key_manager, opsign, service_identity
+from . import authority_trust, key_manager, opsign, scopes, server_auth, service_identity
 from .authority_trust import (
     get_authority_manifest,
     verify_delegation_jwt,
     verify_jwt,
 )
+from .server_auth import AgienceServerAuth, MissingDelegationError, ServerAuth
 from .service_identity import (
     SERVICE_NAMES,
     ServiceIdentity,
@@ -29,8 +38,9 @@ from .service_identity import (
 )
 
 __all__ = [
-    "authority_trust", "key_manager", "opsign", "service_identity",
+    "authority_trust", "key_manager", "opsign", "scopes", "server_auth", "service_identity",
     "verify_jwt", "verify_delegation_jwt", "get_authority_manifest",
     "init_service_identity", "get_service_identity", "ServiceIdentity",
     "sign_service_jwt", "sign_delegation_jwt", "get_host_id", "SERVICE_NAMES",
+    "ServerAuth", "AgienceServerAuth", "MissingDelegationError",
 ]

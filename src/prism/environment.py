@@ -1,22 +1,22 @@
-"""The PRISM and its CAPABILITIES — the environment an ember is grounded on, and the light it shines.
+"""The prism and its capabilities — the environment an ember is grounded on, and the light it shines.
 
-An organon (a real-world/observer interface) thrives only with the right LIGHT and the right SUBSTRATE:
+An organon (a real-world/observer interface) thrives only with the right light and the right substrate:
 the substrate is the lattice it grounds on; the **light is the prism's capabilities** — the affordances
 the *environment* provides so the organon can touch the world. Wrong prism → no light → the organon goes
 honestly dark (dormant), never crashes.
 
-A **capability** is a named, prism-provided AFFORDANCE (`net.get`, `store.write`, `sensor.capture`, … from
-`prism.capabilities.CAPABILITY_KINDS`): a PROBE (is it present *here*?) + a HANDLE (how to do it). It is
-MEASURED and PEER-LOCAL — a prism advertises it only if the probe passes on this environment, never as a
-declared config. The organon codes against the abstract NAME (`net.get`); the prism binds the concrete
-HANDLE (httpx on a cloud box, a cellular modem on a Pi, absent on an air-gap box) — same light, different
-lamp.
+A **capability** is a named, prism-provided affordance (`net.get`, `store.write`, `sensor.capture`, … from
+`prism.capabilities.CAPABILITY_KINDS`): a probe (is it present *here*?) + a handle (how to do it). It is
+measured and peer-local — a prism advertises it when the probe passes on this environment, so the
+advertised set is an observation rather than a declared config. The organon codes against the abstract
+name (`net.get`); the prism binds the concrete handle (httpx on a cloud box, a cellular modem on a Pi,
+absent on an air-gap box) — same light, different lamp.
 
-A **prism** is the environment: a peer-local bag of measured capabilities that ADVERTISES what it can do
-here and PROVIDES the handle. Everything is an artifact — `artifact()` publishes the advertised set (like
-peers-are-artifacts), content-addressed, seedable/loadable. The advertised set is RE-MEASURED on demand
-(self-balancing on the continuum), never frozen: a capability that stops working drops off; one that
-appears is picked up. See `_scratch/PRISM-AND-CAPABILITIES.md`.
+A **prism** is the environment: a peer-local bag of measured capabilities that advertises what it can do
+here and provides the handle. Everything is an artifact — `artifact()` publishes the advertised set (like
+peers-are-artifacts), content-addressed, seedable/loadable. The advertised set is re-measured on demand
+(self-balancing on the continuum) rather than frozen: a capability that stops working drops off; one that
+appears is picked up. See `agience-pharos/genesis/PRISM-AND-CAPABILITIES.md`.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ PRISM_CONTENT_TYPE = "application/vnd.agience.prism+json"
 
 
 class Capability:
-    """A named environmental affordance: a PROBE (present here?) + a HANDLE (how). Measured, peer-local."""
+    """A named environmental affordance: a probe (present here?) + a handle (how). Measured, peer-local."""
 
     __slots__ = ("name", "handle", "_probe")
 
@@ -41,40 +41,28 @@ class Capability:
         self._probe = probe
 
     def present(self) -> Optional[bool]:
-        """Is this capability MEASURABLY present right now? **True / False / None**, and None means
-        UNVERIFIED — not present, not absent, NOT MEASURED.
+        """Is this capability measurably present right now? **True / False / None**, where None means
+        unverified: nothing was measured, so there is no reading to give either way.
 
-        🔴 THIS USED TO RETURN `True` WHEN NO PROBE WAS SUPPLIED, and that was the dangerous polarity
-        (fixed 2026-07-29, Contract Builder). `ember/capability.py` names its own signature defect as
-        *"presenting an unmeasured host as a definitively-EMPTY one"*; prism did the exact mirror image
-        and presented an unmeasured host as a definitively-**FULL** one. The mirror is worse, because
-        emptiness closes gates and fullness OPENS them: with no probe registry anywhere in this repo,
-        every capability on every real host was an unmeasured assertion that rendered as measured, and
-        `Crystal.discharge`'s hardware gate consumed it as fact.
-
-        ⚠ A RAISING PROBE IS NOW `None`, NOT `False`. It previously counted as definite absence, so an
-        identical failed probe meant "not here" in prism and "not measured" in ember — two SDKs
-        disagreeing about the same host. A probe that errors has told you nothing; `False` claims it told
-        you something. `False` is reserved for a probe that ran and said no.
-
-        The consequence, and it is deliberate: **a capability with no probe is not advertised.** A host
-        that wants to assert a structural fact must supply a trivially-true probe — which is exactly what
-        ember does (`_probe_cpu` returns `True` unconditionally, and is still a probe). prism ships
-        MECHANISM only; it must not invent probes on a host's behalf.
+        The consequence: a capability with no probe is not advertised. A host asserting a structural
+        fact supplies a trivially-true probe — which is what ember does
+        (`ember.runtime.capability._probe_cpu` returns `True` unconditionally, and is still a probe).
+        prism ships mechanism; the probes belong to the host.
         """
         if self._probe is None:
             return None
         try:
             return bool(self._probe())
-        except Exception:  # noqa: BLE001 — a probe that errors is INCONCLUSIVE, not a denial
+        except Exception:  # noqa: BLE001 — a probe that errors is inconclusive, not a denial
             return None
 
 
 class Prism:
     """The environment an ember is grounded on — a peer-local, measured bag of capabilities.
 
-    `advertises()` is MEASURED (runs the probes) so it re-balances with the environment; `capability()`
-    hands out the concrete affordance; `artifact()` publishes the prism as a content-addressed artifact.
+    `advertises()` is measured (it runs the probes) so it re-balances with the environment;
+    `capability()` hands out the concrete affordance; `artifact()` publishes the prism as a
+    content-addressed artifact.
     """
 
     def __init__(self, capabilities: Iterable[Capability] = (), *, node_id: str = "local") -> None:
@@ -86,25 +74,24 @@ class Prism:
         return self
 
     def advertises(self) -> Set[str]:
-        """The names this environment MEASURABLY provides right now — probe ran and said YES.
+        """The names this environment measurably provides right now — the probe ran and said yes.
 
-        Now excludes UNVERIFIED capabilities (probe absent, or probe raised). This is the fail-closed
-        direction: the discharge gate consumes this set as fact, so an unmeasured name in here is an
-        unearned authorization. Peer-local and self-balancing — re-measured every call, never a frozen
-        declaration. See `unverified()` for what was asked but not answered, and `Capability.present()`
-        for why the polarity changed.
+        Unverified capabilities (no probe, or a probe that raised) stay out. This is the fail-closed
+        direction: the discharge gate consumes this set as fact, so every name in it is one the host
+        measured. Peer-local and self-balancing — re-measured every call rather than declared once.
+        See `unverified()` for what was asked but not answered.
         """
         return {n for n, c in self._caps.items() if c.present() is True}
 
     def unverified(self) -> Set[str]:
-        """Names that are DECLARED but NOT MEASURED — no probe, or a probe that raised.
+        """Names that are declared but unmeasured — no probe, or a probe that raised.
 
-        Kept distinct from absence on purpose, mirroring `ember.capability.unknown()`. A host that
-        advertises nothing because it measured nothing is a completely different operational state from
-        one that measured and found nothing, and collapsing them is how "the GPU is missing" and "nobody
-        looked for the GPU" become the same report. Nothing gates on this set — it exists so a refusal
-        can say *"unverified"* instead of *"absent"*, which is the difference between "supply a probe"
-        and "buy hardware".
+        Kept distinct from absence, mirroring `ember.runtime.capability.unknown()`. A host that
+        advertises nothing because it measured nothing is a different operational state from one that
+        measured and found nothing; keeping them apart is what keeps "the GPU is missing" and "nobody
+        looked for the GPU" separate reports. Nothing gates on this set — it exists so a report can say
+        *"unverified"* instead of *"absent"*, which is the difference between "supply a probe" and "buy
+        hardware".
         """
         return {n for n, c in self._caps.items() if c.present() is None}
 
@@ -117,18 +104,21 @@ class Prism:
 
     def artifact(self) -> Dict[str, Any]:
         """Publish the prism as a content-addressed artifact — the advertised (measured) capability set.
-        Everything is an artifact: this is how a peer announces its light (seedable/loadable)."""
+        Everything is an artifact: this is how a peer announces its light (seedable/loadable).
+
+        Body: `{id, content_type, node_id, capabilities, unverified, sha256}`, where `sha256` is
+        taken over the canonical JSON of the other five fields."""
         body: Dict[str, Any] = {
             "id": "prism.%s" % self.node_id,
             "content_type": PRISM_CONTENT_TYPE,
             "node_id": self.node_id,
             "capabilities": sorted(self.advertises()),
-            # ADDITIVE (2026-07-29, Contract Builder): declared-but-unmeasured names, published so a
-            # reader can tell "this host has no GPU" from "nobody probed for a GPU". Kept as a separate
-            # key rather than folding state into `capabilities` entries, deliberately: changing that
-            # list's element type from `str` to an object is a WIRE shape change and must land in
-            # prism-py, prism-js and prism-c together (NEXT.md §5.2), whereas an extra key is ignored by
-            # every existing reader. `capabilities` therefore still means exactly "measured YES".
+            # Declared-but-unmeasured names, published so a reader can tell "this host has no GPU"
+            # from "nobody probed for a GPU". A separate key rather than state folded into the
+            # `capabilities` entries: changing that list's element type from `str` to an object is a
+            # wire shape change and would have to land in prism-py, prism-js and prism-c together,
+            # whereas an extra key is ignored by every existing reader.
+            # `capabilities` therefore means exactly "measured yes".
             "unverified": sorted(self.unverified()),
         }
         body["sha256"] = hashlib.sha256(

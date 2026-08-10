@@ -1,0 +1,117 @@
+{
+  "_comment": "THE FRAME WIRE FORMAT, pinned. `BFR1` + rows:u32 + cols:u32 + rows*cols float64, ALL BIG-ENDIAN, C order, then base64. A frame is the payload of a reach, so every language that carries one implements this. Same idiom as contract_vectors.json: the bytes are the contract, and a second implementation is checked against them rather than against a description it has to interpret.",
+  "_format": "base64(b'BFR1' + rows.to_bytes(4,'big') + cols.to_bytes(4,'big') + row_major_float64_big_endian)",
+  "_replaces": "base64 of a NumPy .npy buffer (until 2026-08-04). .npy spells its shape as a Python dict literal in ASCII, so a JS or C carrier had to parse Python syntax; a 2x2 frame cost 128 bytes of header for 32 bytes of data. decode_frame still READS .npy so frames already in flight stay readable.",
+  "_how_to_verify": "base64-decode `encoded`, check the first 4 bytes are 'BFR1', read two big-endian uint32 for shape, read the rest as big-endian float64 in C order, and compare with `values`.",
+  "vectors": [
+    {
+      "name": "single_cell",
+      "note": "the smallest frame; header dominates, which is the point of a 12-byte one",
+      "shape": [
+        1,
+        1
+      ],
+      "values": [
+        [
+          1.0
+        ]
+      ],
+      "encoded": "QkZSMQAAAAEAAAABP/AAAAAAAAA="
+    },
+    {
+      "name": "two_by_two",
+      "note": "exact binary fractions \u2014 any float64 reader reproduces these",
+      "shape": [
+        2,
+        2
+      ],
+      "values": [
+        [
+          1.0,
+          2.0
+        ],
+        [
+          3.0,
+          4.5
+        ]
+      ],
+      "encoded": "QkZSMQAAAAIAAAACP/AAAAAAAABAAAAAAAAAAEAIAAAAAAAAQBIAAAAAAAA="
+    },
+    {
+      "name": "negative_and_zero",
+      "note": "sign bit and positive zero survive the round trip",
+      "shape": [
+        2,
+        2
+      ],
+      "values": [
+        [
+          -1.5,
+          0.0
+        ],
+        [
+          0.0,
+          2.25
+        ]
+      ],
+      "encoded": "QkZSMQAAAAIAAAACv/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAIAAAAAAAA="
+    },
+    {
+      "name": "wide_row",
+      "note": "T=1: one ordered step, five features",
+      "shape": [
+        1,
+        5
+      ],
+      "values": [
+        [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0
+        ]
+      ],
+      "encoded": "QkZSMQAAAAEAAAAFP/AAAAAAAABAAAAAAAAAAEAIAAAAAAAAQBAAAAAAAABAFAAAAAAAAA=="
+    },
+    {
+      "name": "tall_column",
+      "note": "F=1: three ordered steps, one feature. Distinct from wide_row and the header proves it",
+      "shape": [
+        3,
+        1
+      ],
+      "values": [
+        [
+          1.0
+        ],
+        [
+          2.0
+        ],
+        [
+          3.0
+        ]
+      ],
+      "encoded": "QkZSMQAAAAMAAAABP/AAAAAAAABAAAAAAAAAAEAIAAAAAAAA"
+    },
+    {
+      "name": "fractional",
+      "note": "values with no exact binary form \u2014 pins the float64 bits, not a decimal rendering",
+      "shape": [
+        2,
+        2
+      ],
+      "values": [
+        [
+          0.1,
+          0.2
+        ],
+        [
+          0.3,
+          0.4
+        ]
+      ],
+      "encoded": "QkZSMQAAAAIAAAACP7mZmZmZmZo/yZmZmZmZmj/TMzMzMzMzP9mZmZmZmZo="
+    }
+  ]
+}

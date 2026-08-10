@@ -1,23 +1,23 @@
-# CANONICAL HOME (2026-07-24): the crystal CONTRACT lives in PRISM — the host owns the
-# wire-format it grounds, and `activates_on` IS the prism junction gate. Stdlib-only so a bare host
-# validates/hashes/verifies a crystal BEFORE grounding it (client-side integrity, never trusting the
-# server). crystal (=> prism) re-exports this; ember reaches it through crystal. ONE home, no copy.
-"""THE CRYSTAL — the shareable unit of structure (OPERATOR-ARCHITECTURE §12).
+# Canonical home: the crystal contract lives in prism — the host owns the wire format it grounds,
+# and `activates_on` is the prism junction gate. Stdlib-only so a bare host validates, hashes and
+# verifies a crystal before grounding it (client-side integrity, computed locally rather than taken
+# from the server). crystal (=> prism) re-exports this; ember reaches it through crystal. One home.
+"""The crystal — the shareable unit of structure (OPERATOR-ARCHITECTURE §12).
 
     CRYSTAL = FACETS (signal conduits) + TEKTONS (condensors) + ORGANONS (invoked by
-              condensation) ... grown on a LATTICE (the seed shard is INSIDE the crystal).
+              condensation) ... grown on a LATTICE (the seed shard is inside the crystal).
 
-A crystal is PURE STRUCTURE — inert, content-addressed, shareable: an artifact. An ember is
-ENERGIZED crystals (grounded on a prism, energy flowing, the lattice filling). Structure ships,
-state grows: you share the crystal, never the charge.
+A crystal is pure structure — inert, content-addressed, shareable: an artifact. An ember is
+energized crystals (grounded on a prism, energy flowing, the lattice filling). Structure ships,
+state grows: you share the crystal, and the charge stays where it was raised.
 
-Signal flow through one crystal: signal enters a FACET (conduit in) → a TEKTON condenses it →
-threshold → ORGANONS fire (the discharge) → result exits a facet. This is the capacitor model
+Signal flow through one crystal: signal enters a facet (conduit in) → a tekton condenses it →
+threshold → organons fire (the discharge) → result exits a facet. This is the capacitor model
 (§10) with named parts: facets are the terminals, the tekton the condensing process, the organon
 the discharge element.
 
-The prism junction is BIDIRECTIONAL and gated by NAMED capabilities (beam's operator/capability
-vocabulary): a prism ACTIVATES a crystal (grounds it), and a crystal ACTIVATES THROUGH a prism
+The prism junction is bidirectional and gated by named capabilities (the operator/capability
+vocabulary): a prism activates a crystal (grounds it), and a crystal activates through a prism
 (actuates the world). `activates_on` answers both with one subset check — any crystal, any prism,
 capability-permitting.
 
@@ -35,46 +35,38 @@ from .capabilities import OPEN_FAMILIES  # stdlib-only sibling; keeps the bare-h
 
 CRYSTAL_CONTENT_TYPE = "application/vnd.agience.crystal+json"
 
-#: A facet is a signal CONDUIT, bidirectional. A human view is a facet whose far side is a
+#: A facet is a signal conduit, bidirectional. A human view is a facet whose far side is a
 #: human; a webhook is one whose far side is a machine. `direction` declares the conduit's
 #: allowed flow; "both" is the general case.
 #:
-#: THE BINDING IS THE WAVEFORM (Sec.12 closure): a facet's contract is the signal itself, in
-#: its ordered waveform - NEVER a declared schema. Compatibility at a channel is MEASURED
-#: (does the waveform couple - impedance/K_signal at the joint frame), not gated by type;
-#: a typed gate at the conduit would be a step-I/O pipeline contract, which the propagation
-#: rule forbids. A facet's one structural obligation is ORDER-PRESERVATION (the Screen is
-#: ordered; a conduit that scrambles is a destroyer, not a conduit). The content TYPE is BORN
-#: at the tekton - condensation IS "signal to content type" - so an optional `content_type`
-#: on a facet is a descriptive HINT for discovery, never a gate. Waveform before condensation
-#: (continuous, measured); typed artifact after it (discrete, signed) - the waveform-provenance
-#: boundary, with the tekton as the crossing point.
+#: The binding is the waveform (Sec.12 closure): a facet's contract is the signal itself, in
+#: its ordered waveform, rather than a declared schema. Compatibility at a channel is measured
+#: (does the waveform couple - impedance/K_signal at the joint frame) rather than gated by
+#: type, which keeps a conduit from becoming a step-I/O pipeline stage. A facet's one
+#: structural obligation is order-preservation: the Screen is ordered, so a conduit carries
+#: the order it was given. The content type is born at the tekton - condensation is "signal
+#: to content type" - so an optional `content_type` on a facet is a descriptive hint for
+#: discovery. Waveform before condensation (continuous, measured); typed artifact after it
+#: (discrete, signed) - the waveform-provenance boundary, with the tekton as the crossing point.
 FACET_DIRECTIONS = ("in", "out", "both")
 
 _REQUIRED = ("name", "facets", "tektons", "created_by")
 
 
 def canonical_json(obj: Any) -> bytes:
-    """RFC 8785 (JCS) canonical JSON bytes — re-exported from the ONE source, `prism.canonical`.
+    """RFC 8785 (JCS) canonical JSON bytes — re-exported from the one source, `prism.canonical`.
 
-    Kept as a name here because every existing importer uses `crystal_model.canonical_json`; the
-    implementation lives in `prism/canonical.py` so beam and the bare-environment installer can vendor
-    a byte-identical copy (their vendoring is gated — see that module's header).
+    Available under this name because importers reach it as `crystal_model.canonical_json`; the
+    implementation lives in `prism/canonical.py` so a bare environment can vendor a byte-identical
+    copy (that vendoring is gated — see that module's header).
     """
     return _canonical_json(obj)
 
 
-#: The fields a BUNDLE's sha256 covers, in the order the payload is built.
+#: The fields a bundle's sha256 covers, in the order the payload is built.
 #:
-#: ⚠ THE PUBLISHER AND THE VERIFIER MUST AGREE, AND ONE OF THEM NO LONGER EXISTS.
-#: `ember/runtime/runner.py::_canonical` carried this tuple with the docstring "build_bundles.
-#: canonical, reproduced exactly (keys, ordering, separators) — the runner must recompute the SAME
-#: payload the publisher hashed, or verification means nothing." `build_bundles.py` is GONE from the
-#: tree, so what remained was a reproduction of an absent original: nothing to check it against, and
-#: no definition for a future publisher to build to.
-#:
-#: It lives here because a bundle's manifest shape is a CONTRACT, next to `crystal_sha` which does
-#: the same job for a crystal. Anyone writing the publisher back should implement it against this.
+#: A bundle's manifest shape is a contract, so it lives here beside `crystal_sha`, which does the
+#: same job for a crystal. A publisher implements against this tuple.
 BUNDLE_SHA_FIELDS = ("group", "entry_module", "register_fns", "host_seams", "modules")
 
 
@@ -88,25 +80,26 @@ def bundle_canonical(bundle: Dict[str, Any]) -> bytes:
 
 
 def crystal_sha(crystal: Dict[str, Any]) -> str:
-    """Content-address the STRUCTURE: everything except the sha field itself."""
+    """Content-address the structure: everything except the sha field itself."""
     body = {k: v for k, v in crystal.items() if k != "sha256"}
     return hashlib.sha256(canonical_json(body)).hexdigest()
 
 
 def validate(crystal: Dict[str, Any]) -> List[str]:
-    """Schema check — problems list ([] = valid). Loud on shape errors: an invalid crystal must
-    refuse to ground, never half-load.
+    """Schema check — returns the problems list ([] = valid). Every problem is collected rather
+    than stopping at the first, so one pass names everything a caller has to fix, and a crystal
+    grounds only once the list is empty.
 
     Shape:
       name         : the crystal id
       facets       : [{name, direction, content_type?}]     — the conduits (≥1: a crystal with
-                     no facet is sealed glass — nothing can enter or leave)
-      tektons      : [{name, domain}]                       — the condensors (≥1: nothing
-                     condenses without one)
+                     no facet is sealed glass, and nothing enters or leaves)
+      tektons      : [{name, domain}]                       — the condensors (≥1: condensation
+                     happens in a tekton)
       organons     : [{name, requires?: [capability, ...]}] — the invoked instruments (op.*).
-                     MAY be empty: a pure-conduit crystal routes without transforming.
+                     May be empty: a pure-conduit crystal routes without transforming.
       lattice_seed : {artifacts?: [...], collections?: [...]} — optional seed shard; the lattice
-                     a shared crystal starts from. State GROWS from here; it never ships back.
+                     a shared crystal starts from. State grows from here and stays local.
       created_by   : resolvable creator (provenance gates grounding — the Higgs rule)
     """
     p: List[str] = []
@@ -132,18 +125,6 @@ def validate(crystal: Dict[str, Any]) -> List[str]:
         if not isinstance(organons, list) or not all(isinstance(o, dict) and o.get("name") for o in organons):
             p.append("organons must be a list of named objects")
         else:
-            # 🔴 THE SPELLING CHECK WAS MISSING HERE AND PRESENT IN prism-js (added 2026-07-29,
-            # Contract Builder). Measured: on a crystal requiring `totally.bogus`, JavaScript reported
-            # the unknown kind and Python reported nothing — so **Python, which is the canonical
-            # implementation AND the side that SIGNS crystals** (`crystal_artifact`), would validate and
-            # sign a requirement no platform will honour. prism-js's own comment names this exact
-            # failure mode: *"an unknown kind here would be signed into an artifact and then refused by
-            # the platform (how prism-c shipped `webgpu`)"* — and the signer was the one without the
-            # guard.
-            # SPELLING, NOT MATCHING: `is_known_capability` accepts open-family members
-            # (`sensor.*` / `actuator.*`) by prefix, so this refuses typos without refusing real
-            # devices. Matching is propagation's job (`capability_reach`), never this function's.
-            # Message text is byte-identical to prism-js's so the shared vectors can pin both.
             from .capabilities import is_known_capability
             for o in organons:
                 for r in o.get("requires") or []:
@@ -165,8 +146,8 @@ def required_capabilities(crystal: Dict[str, Any]) -> List[str]:
 
 
 def _family_of(kind: str) -> Any:
-    """The OPEN family a capability belongs to (`sensor.` / `actuator.`), or None. A bare prefix is
-    not a member of its own family — `sensor.` names no device."""
+    """The open family a capability belongs to (`sensor.` / `actuator.`), or None. Membership needs
+    something after the prefix — a bare `sensor.` names no device."""
     for p in OPEN_FAMILIES:
         if kind.startswith(p) and len(kind) > len(p):
             return p
@@ -174,26 +155,14 @@ def _family_of(kind: str) -> Any:
 
 
 def capability_reach(required: List[str], advertised: List[str]) -> List[Dict[str, Any]]:
-    """MEASURE the junction instead of testing membership: for each required capability, the
-    NEAREST thing this prism affords, and how far away it is.
+    """Measure the junction instead of testing membership: for each required capability, the
+    nearest thing this prism affords, and how far away it is.
 
     Returns one entry per requirement: `{"required", "matched", "basis", "hops"}` where basis is
-    `"exact"` (0 hops), `"family"` (1 hop — a different member of the same OPEN family, e.g. the
+    `"exact"` (0 hops), `"family"` (1 hop — a different member of the same open family, e.g. the
     crystal wants `sensor.temperature` and the prism affords `sensor.capture`), or `None` (out of
-    reach entirely). This is what lets a refusal name a REACH gap rather than a spelling gap.
+    reach entirely). This is what lets a gap be reported as a reach gap rather than a spelling gap.
 
-    ⚠ SEAM (flagged, honest default — [[no-arbitrary-caps]]). A 1-hop family neighbour is REPORTED
-    but does NOT satisfy the gate below, and that is deliberate: `sensor.thermal` is not a
-    substitute for `sensor.temperature` just because both are sensors, and inventing a
-    "near enough" threshold here would be fitting. Whether family-nearness may SATISFY is John's
-    call and belongs AFTER the grant gate lands (`NEXT.md §Q` — discharge is authorized by the grant
-    on the energy, not by owning a name), because loosening the match before authorization moves is
-    a straight widening of the permission surface.
-
-    ⚠ Note the STRUCTURAL limit: this module is stdlib-only on purpose, so a bare host can verify a
-    crystal BEFORE grounding it. Geodesic/measured propagation (`match.select`, `spread_graph`)
-    needs the geometry store and therefore cannot run here — the true propagation match belongs on
-    the side that carries the lattice (ember/chorus), with this junction reporting structural reach.
     """
     adv = [a for a in (advertised or [])]
     adv_set = set(adv)
@@ -214,11 +183,9 @@ def capability_reach(required: List[str], advertised: List[str]) -> List[Dict[st
 def activates_on(crystal: Dict[str, Any], prism_capabilities: List[str]) -> bool:
     """The bidirectional prism junction. Grounding-in and actuating-out are the same question.
 
-    Answered by MEASURING reach (`capability_reach`) rather than by a subset test — the gate itself
-    still requires every requirement to be met EXACTLY, so this is not a behaviour change; what it
-    buys is that the near-miss is now measurable and reportable instead of collapsing to a bare
-    False. See `capability_reach` for the flagged seam on whether 1-hop family nearness should ever
-    satisfy (it must not, until discharge is grant-authorized — `NEXT.md §Q`).
+    Answered by measuring reach (`capability_reach`) rather than by a subset test: the gate requires
+    every requirement to be met exactly, and the near miss stays measurable and reportable instead of
+    collapsing to a bare False. 1-hop family nearness is measured but does not satisfy the gate.
     """
     return all(m["basis"] == "exact"
                for m in capability_reach(required_capabilities(crystal), prism_capabilities))
@@ -249,8 +216,8 @@ def crystal_artifact(crystal: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def verify(artifact: Dict[str, Any]) -> Dict[str, Any]:
-    """Re-hash a crystal artifact's content and refuse on mismatch — the integrity gate, same
-    refuse-before-grounding rule as the bundle runner. Returns the parsed crystal on success."""
+    """Re-hash a crystal artifact's content and raise ValueError on mismatch — the integrity gate,
+    checked before grounding as the bundle runner does. Returns the parsed crystal on success."""
     body = json.loads(artifact["content"])
     claimed = body.get("sha256")
     actual = crystal_sha(body)

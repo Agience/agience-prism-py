@@ -1,7 +1,7 @@
 """Canonical configuration (Prism Protocol §4 + Appendix).
 
-A server reads **only** canonical platform variable names and MUST NOT invent
-aliases (`*_API_URI`, `BACKEND_URI`, …):
+The vocabulary is closed: a server reads the canonical platform variable names,
+and names outside this table (`*_API_URI`, `BACKEND_URI`, …) carry no meaning.
 
     ORIGIN_URI   identity / auth authority
     MANTLE_URI   artifact store + capability routing
@@ -9,9 +9,8 @@ aliases (`*_API_URI`, `BACKEND_URI`, …):
     CHORUS_URI   host / persona discovery (`.well-known/mcp`)
     KEYS_DIR     host signing / identity keys (signing hosts only)
 
-For a transition window the former SDK name ``AGIENCE_API_URI`` is still honored
-as an alias for ``MANTLE_URI`` (where artifacts, routing, and registration
-lived), but its use emits a :class:`DeprecationWarning` and a one-time log line.
+``AGIENCE_API_URI`` is honored as a deprecated alias for ``MANTLE_URI``; reading
+it emits a :class:`DeprecationWarning` and a one-time log line.
 
 Values resolve **lazily** — per call, not at import — so tests and runtime env
 changes take effect, and the deprecation fires only when a legacy name is
@@ -35,7 +34,7 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "KEYS_DIR": (),
 }
 
-# dev-friendly localhost defaults, matching agience-beam's port assignments.
+# dev-friendly localhost defaults, matching the platform's local port assignments.
 _DEFAULTS: dict[str, str] = {
     "ORIGIN_URI": "http://localhost:8080",
     "MANTLE_URI": "http://localhost:8081",
@@ -108,9 +107,10 @@ def authority_manifest_path(default: Optional[str] = None) -> Optional[str]:
     ``KEYS_DIR`` is set **and the file exists**, else ``default``. The manifest
     maps each trust anchor (origin / mantle / chorus) to its published JWKS (§5.2).
 
-    The existence check is deliberate: a host may set ``KEYS_DIR`` only to sign,
-    with no manifest present. Returning the path unconditionally would flip such
-    a host into JWT-enforcing mode with an empty keyset and reject every token.
+    The existence check is what makes signing-only hosts work: a host may set
+    ``KEYS_DIR`` purely to sign, with no manifest present. Returning the path
+    unconditionally would put such a host into JWT-enforcing mode with an empty
+    keyset, where every token fails to verify.
     """
     kd = keys_dir()
     if kd:
