@@ -1,0 +1,53 @@
+name: Release
+
+# Cut a release by pushing a version tag (the tag, minus "v", must match
+# `version` in pyproject.toml):
+#     git tag v0.1.0 && git push origin v0.1.0
+# One job builds, creates the GitHub Release, and publishes to PyPI via
+# Trusted Publishing (OIDC) — no token stored. Tests are NOT re-run here:
+# ci.yml gates every commit on main, and the tag points at a tested one.
+#
+# Only the BASE install (stdlib, zero dependencies — the contract) is published here. The
+# `trust`, `host`, `server`, `cli`, `vector` and `wire` runtime extras publish along with it in
+# the same wheel/sdist; they just stay dormant until a consumer opts in with `pip install
+# 'agience-prism-py[...]'`.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}      # manual dry run: build only (no release/publish)
+
+permissions:
+  contents: write            # create the GitHub Release
+  id-token: write            # PyPI Trusted Publishing (OIDC)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: pypi         # must match the PyPI publisher's Environment name
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Tag matches pyproject version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          echo "tag=$tag  pyproject=$ver"
+          test "$tag" = "$ver" || { echo "::error::tag v$tag != pyproject version $ver"; exit 1; }
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          python -m twine check dist/*
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*
+      - name: Publish to PyPI
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: pypa/gh-action-pypi-publish@release/v1

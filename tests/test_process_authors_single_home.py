@@ -1,9 +1,9 @@
 """`PROCESS_AUTHORS` has one home — asserted against the source, not against an import.
 
 "Is this author subject a PROGRAM?" is answered by one frozenset, imported everywhere it is asked:
-`mantle/person.py` reads it to decide whether to mint a person artifact or a foundation entity,
-`crystal/evolution.py` reads the same object for `preserve_fitness`'s creator-clobber guard. A
-second, independently maintained copy would agree only by coincidence, and edited on one side and
+`mantle/services/principal.py` reads it to decide whether to mint a person artifact or a foundation
+entity, `crystal/evolution.py` reads the same object for `preserve_fitness`'s creator-clobber guard.
+A second, independently maintained copy would agree only by coincidence, and edited on one side and
 not the other it would answer differently about the same author — minting
 `application/vnd.agience.person+json` for an ingest program in one repo while the other correctly
 calls it a process.
@@ -20,6 +20,7 @@ The failure modes these tests watch for, stated first so they can fail:
   - the set silently loses a member that live rows depend on (each named subject is pinned).
 """
 import ast
+import importlib
 import pathlib
 
 import pytest
@@ -79,9 +80,20 @@ def test_exactly_one_module_declares_it(name):
 
 def test_both_re_exports_are_the_SAME_object():
     """The re-exports are what keep existing callers working; if one is rebound to a local copy the
-    AST scan above catches the declaration, and this catches a rebinding to some other module's."""
-    mantle = pytest.importorskip("mantle.person")
-    crystal = pytest.importorskip("crystal.evolution")
+    AST scan above catches the declaration, and this catches a rebinding to some other module's.
+
+    The skip gate is the PACKAGE, not the module that re-exports. Neither mantle nor crystal is a
+    prism dependency — prism is the leaf they both import, and the edge may not run the other way —
+    so a bare SDK install has neither installed and there is genuinely nothing here to compare.
+    Once the package IS importable the re-exporting module is imported outright, because
+    `importorskip` on the module cannot tell "mantle is not installed" from "the home is gone":
+    both read as a skip, and the second is the exact failure this file exists to catch, reported
+    as a pass.
+    """
+    pytest.importorskip("mantle")
+    pytest.importorskip("crystal")
+    mantle = importlib.import_module("mantle.services.principal")
+    crystal = importlib.import_module("crystal.evolution")
     assert mantle.PROCESS_AUTHORS is PROCESS_AUTHORS
     assert crystal.PROCESS_AUTHORS is PROCESS_AUTHORS
     assert mantle.is_process_author is is_process_author
