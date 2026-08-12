@@ -89,6 +89,10 @@ __all__ = [
     "get_default",
     "clear_default",
     "resolve",
+    "set_default_read",
+    "get_default_read",
+    "clear_default_read",
+    "resolve_read",
 ]
 
 
@@ -772,3 +776,72 @@ def resolve(instrument: Any, member: str, *, at: str) -> Any:
             % (at, _FILLED_BY["embodiment"]),
             contract="embodiment", member=member, at=at)
     return require(slot, member, contract="embodiment", at=at)
+
+
+# ── The read default — a second, independent slot ─────────────────────────────────────────────────
+# The embodiment slot above exists for the wire's two straddle points and nothing else — `resolve()`
+# checks it and only it, by the file's own long-standing statement. A `Read` embodiment (a spectral
+# structure read: `k_signal`, coherence, the noise-floor comparison) is a different question from
+# `absorb_transmit`/`next_by_coupling`, asked by different callers, and a full node's answer to it
+# (`ember.optics`) and a constrained store's answer (a domain-specific corpus reader, e.g. mantle's
+# beacon) can legitimately differ in the same way the embodiment slot's two answers do. So this is a
+# second slot, not a second meaning layered onto the first — the same lock-and-factory shape, kept
+# separate so clearing or reading one never touches the other.
+#
+# A constrained host that fills `Read` (not `Instrument`, not `Dynamics` — see `require()`'s
+# per-member check) registers itself here with `set_default_read(...)`, and SHOULD do so only when
+# the slot is still empty: `if get_default_read() is None: set_default_read(...)`. That convention —
+# enforced by the caller, not by this module, exactly as `set_default`'s overwrite-on-call is enforced
+# by whichever host calls it last — is what lets a fuller embodiment imported later in the same
+# process take the slot over a narrower one that registered first, and lets a narrower one that
+# imports first still yield if a fuller one already claimed it. This module holds no priority concept
+# of its own; it holds one slot, and "prefer the fuller one" is a convention two well-behaved
+# registrants keep, the same way the embodiment slot's callers already do.
+
+_read_lock = threading.Lock()
+_read_default: Optional[Any] = None
+_read_factory: Optional[Callable[[], Any]] = None
+
+
+def set_default_read(instrument: Any = None, *, factory: Optional[Callable[[], Any]] = None) -> None:
+    """Register the process-wide `Read` instrument — the same shape as `set_default`, for the
+    `"read"` contract instead of `"embodiment"`. See `set_default` for the `instrument=`/`factory=`
+    choice and why the factory form is what a package registers at import time."""
+    global _read_default, _read_factory
+    if instrument is not None and factory is not None:
+        raise ValueError("set_default_read takes an instrument OR a factory, not both")
+    with _read_lock:
+        _read_default = instrument
+        _read_factory = factory
+
+
+def clear_default_read() -> None:
+    """Empty the read slot. Used by tests that need to observe `InstrumentRequired` being raised."""
+    set_default_read()
+
+
+def get_default_read() -> Optional[Any]:
+    """The registered `Read` default, resolving a factory on first use — or `None` if the slot is
+    empty. `None` reports an empty slot, rather than raising or returning a stand-in instrument."""
+    global _read_default, _read_factory
+    with _read_lock:
+        if _read_default is None and _read_factory is not None:
+            _read_default = _read_factory()
+            _read_factory = None
+        return _read_default
+
+
+def resolve_read(instrument: Any, member: str, *, at: str) -> Any:
+    """Return the callable `member` of the `Read` instrument to use here, or refuse. The `"read"`
+    counterpart of `resolve` — see it for the resolution order (explicit `instrument=` first, then
+    the process default, then `InstrumentRequired`)."""
+    slot = instrument if instrument is not None else get_default_read()
+    if slot is None:
+        raise InstrumentRequired(
+            "%s needs a Read instrument and none was injected. Hand one to the call "
+            "(`instrument=<implementation>`) or register a process default with "
+            "`prism.instrument.set_default_read(...)`. A full node injects `%s`; a constrained "
+            "store injects its own and refuses exactly what it cannot measure."
+            % (at, _FILLED_BY["read"]),
+            contract="read", member=member, at=at)
+    return require(slot, member, contract="read", at=at)
