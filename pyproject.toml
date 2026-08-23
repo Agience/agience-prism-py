@@ -14,7 +14,7 @@ authors = [{ name = "Ikailo Inc." }]
 # It used to list all six of fastapi, uvicorn, httpx, mcp, pyjwt and python-jose, because
 # `prism/__init__.py` imported host/server/trust eagerly. So reading one constant cost a web
 # framework — and that weight had a measured consequence: `agience-beam` would not depend on this
-# package at all and VENDORED a byte-identical `canonical.py`, with `agience-bundle` doing the same
+# package at all and VENDORED a byte-identical `canonical.py`, with `agience-observe` doing the same
 # for its bare installer. Three copies of the code that decides every content address and every
 # signature, kept in step by a gate, because the SDK could not be imported cheaply.
 #
@@ -41,10 +41,10 @@ dependencies = []
 
 [project.scripts]
 # The `prism` CLI (prism/cli.py): init / list / install / publish. `install` and
-# `publish` verify through beam.crystal_model (agience-beam, Apache — the crystal
-# contract's common ground); beam is imported lazily at command run and is expected
-# from the environment, matching the workspace convention (editable installs), since
-# agience-beam is not published on PyPI.
+# `publish` verify through `prism.crystal_model` — the crystal contract's common
+# ground, in this package's dependency-free base. It USED TO be `beam.crystal_model`,
+# imported lazily from the environment; `agience-beam` was archived 2026-08-05 and the
+# contract has lived here since, so the CLI has no cross-repo import left to arrange.
 prism = "prism.cli:main"
 
 [project.optional-dependencies]

@@ -103,7 +103,7 @@ def test_the_base_install_still_has_no_dependencies():
     of them."""
     assert _pyproject()["project"]["dependencies"] == [], (
         "the wire landed in the BASE install. It belongs in the `wire` extra — the contract is what "
-        "`agience-beam` and `agience-bundle` stopped vendoring `canonical.py` because of.")
+        "`agience-beam` and `agience-observe` stopped vendoring `canonical.py` because of.")
 
 
 def test_the_wire_extra_exists_and_names_exactly_what_the_wire_imports():

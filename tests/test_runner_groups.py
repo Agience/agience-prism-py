@@ -34,7 +34,7 @@ from prism.crystal_model import bundle_canonical
 
 # ── Synthetic bundles: built through the same canonicalization the runner verifies with ──────────
 #
-# Built here rather than copied from `agience-bundle/bundles/`: a group prism has never seen is the
+# Built here rather than copied from `agience-observe/bundles/`: a group prism has never seen is the
 # thing under test, and a shipped payload would exercise the ones already known to load.
 
 def _demo_source(group: str) -> str:

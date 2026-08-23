@@ -17,7 +17,9 @@ fixes the cases each gets wrong alone — the noise floor alone keeps all of `[5
 extreme value drags the absolute floor down); a gap rule with a fixed `2.0` guard is crude on gentle
 decays. Composed, the pair needs no constant at all.
 
-Gated by `EMBER_ADAPTIVE_MODE` (`off` | `on` | `shadow`), default `off` — the serve path uses its
+Gated by `EMBER_ADAPTIVE_MODE` (`off` | `on` | `shadow`). The default is `on` (see `_DEFAULT_MODE`
+and the measurement above it); this paragraph said `off` until 2026-08-22, which was the default
+when it was written and had not moved with it. `off` makes the serve path use its
 baseline (`content_search._knee`) byte-for-byte until the switch is flipped. `shadow` serves the
 baseline unchanged and records the adaptive pick alongside it (label-free A/B on real queries, sink
 `EMBER_ADAPTIVE_SHADOW_LOG`). Falls back to the baseline when the instrument is unavailable or the
@@ -41,9 +43,34 @@ import os
 from typing import Optional, Sequence
 
 
+#: The default is `on`: the instrument reads the cut, and a host without one falls back on its own.
+#:
+#: It was `off` while the baseline was the only measured path. Measured against it on the live
+#: 676,225-synset corpus, over the reach-ranked answer sets `sage.content_search` produces:
+#:
+#:     question                                 _knee   instrument
+#:     what is a black hole                       213           15
+#:     what is machine learning                   227           11
+#:     difference between weather and climate     204            8
+#:     what is a glacier                           48           11
+#:     what are the planets                        72            8
+#:     what is photosynthesis                       3           11
+#:
+#: `_knee` is a proportional-drop rule over a score column, and on a reach-ranked series it has no
+#: split to find three times in nine — returning the WHOLE set, which is the same as no cut at all.
+#: The instrument reads the candidates' own coordinates instead of their scores, so it answers how
+#: many distinguishable things were reached; across those queries it lands between 7 and 15 rather
+#: than between 3 and 227.
+#:
+#: Turning it on costs nothing where there is no instrument: `cut` returns `None` — its word for
+#: "defer" — and the caller keeps `_knee`. That is the same path a reduced install already takes,
+#: so the default changes what a full node does and leaves an embedded one exactly as it was.
+_DEFAULT_MODE = "on"
+
+
 def mode() -> str:
-    m = (os.getenv("EMBER_ADAPTIVE_MODE") or "off").strip().lower()
-    return m if m in ("off", "on", "shadow") else "off"
+    m = (os.getenv("EMBER_ADAPTIVE_MODE") or _DEFAULT_MODE).strip().lower()
+    return m if m in ("off", "on", "shadow") else _DEFAULT_MODE
 
 
 def _resolvable():
@@ -116,8 +143,21 @@ def cut(scores: Sequence[float], *, frame=None) -> Optional[int]:
     `frame` is the ordered (T, F) evidence behind those scores — the candidates' own features, in
     score order. It is what the aperture reads, and with it this becomes the instrument's `k_signal`
     rather than an approximation of it. Without it the read defers, because a score column is a line
-    and the number of spots on a line is a different question. No caller here supplies a real frame
-    yet; a synthesised one would be a reading nobody took.
+    and the number of spots on a line is a different question, and a synthesised frame would be a
+    reading nobody took.
+
+    A real frame is supplied by `sage/content_search.py`, which stacks each reached candidate's
+    dense Jiang-Conrath coordinate in reach order and passes it through `_relevance_cut`. Measured
+    through that path, "photosynthesis" reads 1 and "cats and dogs" reads 2. What gates the read is
+    `EMBER_ADAPTIVE_MODE`, which defaults to `on` — see `_DEFAULT_MODE`.
+
+    That frame is built from COORDINATES the geometry can place, so a ranking of ordinary documents
+    — which have no synset names — still yields none, and the cut falls to its baseline there.
+    `mantle.search.beacon.cut.screen_frame` (added 2026-08-22) is the other half: the query-relative
+    multi-head screen `W[item, head]`, each candidate's per-head cosine to the query, built from
+    embeddings and needing no names at all. It is reachable and deliberately not wired to a live
+    caller, because it costs an embeddings lookup per candidate and whether that is worth paying is
+    a measurement on a corpus rather than an argument.
 
     Never raises."""
     rel = [-float(x) for x in scores]     # BM25 is negative; relevance is higher = better
@@ -136,10 +176,11 @@ def cut(scores: Sequence[float], *, frame=None) -> Optional[int]:
         if k is None:
             # The aperture had no reading for this frame, so there is nothing to cut on. `None` is
             # this module's word for "defer to the baseline", and deferring is what an unread frame
-            # warrants; returning `n` would report "keep everything" as a derived decision. The frame
-            # is unread because a 1-D score column is a line, not a frame — the number of spots on a
-            # line is a different question. This read has no caller that hands it a real (T, F) frame,
-            # the candidates' own features in score order.
+            # warrants; returning `n` would report "keep everything" as a derived decision. This
+            # branch is reached when `frame` was None or unreadable — a 1-D score column is a line,
+            # not a frame, and the number of spots on a line is a different question. It is NOT the
+            # normal path: `content_search` hands this read the reached candidates' own JC
+            # coordinates, and that frame resolves above.
             return None
         if k == 0:                        # read, and indistinguishable from noise → keep all
             return n
