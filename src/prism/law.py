@@ -14,9 +14,18 @@ a correlation scale `scale`:
                                     ember.ontology.activation
     cooled_integral / settle_time   the area under one decay segment, and the inverse crossing
 
-The `scale` that goes in is the one the aperture measured (`ember.optics.correlation_length`, or
-the rates off `ember.optics.fit_dynamics`), so a call site writes
-`law.attenuate(d, length=optics.correlation_length(frame))`.
+The `scale` that goes in is one the CALLER measured, in the space the distance was measured in.
+That is a real constraint, not a formality — a scale from the wrong space silently rescales every
+decay:
+
+  * ordered `(T, F)` frames -> `ember.optics.correlation_length`, or the rates off
+    `ember.optics.fit_dynamics`. A decorrelation length along the row order of a frame.
+  * ontology / taxonomy distances -> `ember.ontology.match.xi()`. A length in Jiang-Conrath nats,
+    derived from the corpus diameter.
+
+The two are not interchangeable. A corpus's is-a structure is not a `(T, F)` frame, and
+`Dynamics.rates()` returns `None` on a concept stream, so `correlation_length` has nothing to read
+there. Take the scale from whichever instrument measured the distance being attenuated.
 
 Every entry clamps the travelled quantity at 0, so `exp(-x/s) <= 1` holds for a negative distance or
 a backwards clock, and keeps `scale` strictly positive (a zero scale is a singularity, handled as

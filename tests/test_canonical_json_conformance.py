@@ -41,7 +41,7 @@ def test_matches_prism_c_utf8_passthrough_byte_for_byte():
 
 
 def test_a_non_ascii_crystal_has_a_stable_cross_sdk_address():
-    """The point of the whole exercise: the content address of a crystal carrying non-ASCII is now the
+    """The point of the whole exercise: the content address of a crystal carrying non-ASCII is the
     same value every SDK computes, so a host cannot sign something the platform then rejects."""
     crystal = {"name": "crystal.capteur-température",
                "organons": [{"name": "op.sense", "requires": ["sensor.capture"]}]}

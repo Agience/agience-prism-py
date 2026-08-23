@@ -23,7 +23,7 @@ Where bundles come from, in order:
   2. A file the host bound to the group with `register_group(name, path)` — for a payload that
      lives outside the shipped directory (a third-party tekton's bundle beside its own package).
      sha-verified against its own manifest, exactly like (3).
-  3. The shipped data files `agience-bundle/bundles/<group>.json`, built from chorus
+  3. The shipped data files `agience-observe/bundles/<group>.json`, built from chorus
      `definitions/bundles/`. Same bytes, same sha the mesh carries; it exists so an offline node
      bootstraps with no chorus checkout and no store bundle. sha-verified against its own manifest.
 
@@ -91,12 +91,12 @@ BUNDLE_CONTENT_TYPE = "application/vnd.agience.bundle+json"
 BUNDLE_ARTIFACT_PREFIX = "bundle-"
 
 def _data_dir() -> Optional[Path]:
-    """Where the shipped bundle files live — in `agience-bundle`, never inside a host package.
+    """Where the shipped bundle files live — in `agience-observe`, never inside a host package.
 
     Resolution order, and every step is explicit rather than guessed:
       1. `$AGIENCE_BUNDLE_ROOT` — what a deployment sets. Points at the directory holding
-         `<group>.json`, or at the `agience-bundle` checkout containing `bundles/`.
-      2. The sibling `agience-bundle/bundles/` next to this checkout — the developer case.
+         `<group>.json`, or at the `agience-observe` checkout containing `bundles/`.
+      2. The sibling `agience-observe/bundles/` next to this checkout — the developer case.
       3. None. There is no in-package fallback, deliberately: a silent fallback to a stale embedded
          copy is exactly how two versions of a content-addressed payload start to disagree, and the
          sha gate would then be verifying the wrong bytes faithfully.
@@ -110,10 +110,10 @@ def _data_dir() -> Optional[Path]:
     if raw:
         p = Path(raw).expanduser()
         candidates += [p, p / "bundles"]
-    # …/agience-genesis/agience-prism/py/src/prism/runner.py -> …/agience-genesis/agience-bundle
+    # …/<workspace>/agience-prism/py/src/prism/runner.py -> …/<workspace>/agience-observe
     here = Path(__file__).resolve()
     for parent in here.parents:
-        candidates.append(parent / "agience-bundle" / "bundles")
+        candidates.append(parent / "agience-observe" / "bundles")
     for c in candidates:
         try:
             if c.is_dir():
@@ -225,7 +225,7 @@ def register_group(name: str, path) -> None:
     if not p.is_file():
         raise FileNotFoundError(
             "register_group(%r, %s): no such bundle payload file. Register the path of a built "
-            "`<group>.json` (agience-bundle/build_bundles.py writes them)" % (group, p))
+            "`<group>.json` (agience-observe/build_bundles.py writes them)" % (group, p))
     _HOST_GROUPS[group] = p.resolve()
 
 
@@ -521,7 +521,7 @@ def _bundle_from_data(group: str) -> dict:
         raise UnknownBundleGroupError(
             "no bundle for group %r. A group EXISTS when its sha-verified payload does, so this is "
             "the whole answer: the store has no `bundle-%s` artifact, no host registered a file for "
-            "it, and %s. Supply it by building `agience-bundle/bundles/%s.json` (add the group to "
+            "it, and %s. Supply it by building `agience-observe/bundles/%s.json` (add the group to "
             "bundle_spec.json and run build_bundles.py), by publishing a `bundle-%s` artifact, or by "
             "calling prism.runner.register_group(%r, path) at boot. Discoverable here: %s. "
             "There is deliberately no in-package copy to fall back to: a second copy of a "

@@ -2,7 +2,7 @@
 
 Without `__init__.py`, pytest can import a test module under its bare basename, so two files called
 `test_auth.py` resolve to one module name: the second import finds the first already in `sys.modules`
-and returns it, and the second file's tests never run. `agience-bundle/bundle_spec.json` pins every
+and returns it, and the second file's tests never run. `agience-observe/bundle_spec.json` pins every
 module path rather than searching by basename for the same reason (`sage/operators.py` vs
 `iris/comms/operators.py`).
 

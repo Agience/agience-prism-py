@@ -233,7 +233,8 @@ assert abs(exact_limit(20) - 0.95) < 1e-12
 assert abs(estimator_limit(99) - 0.99) < 1e-12
 assert partition([9.0] * 20 + [0.5] * 20)[0] == 20
 
-assert adaptive_cut.mode() == 'off'
+assert adaptive_cut.mode() == 'on'          # the default INTENT; the three below are why
+                                            # intent cannot produce a cut without an instrument
 assert adaptive_cut.is_available() is False, 'claimed an instrument with numpy unimportable'
 assert adaptive_cut.cut([-3.0, -2.0, -1.0]) is None, 'guessed a cut with no instrument'
 assert adaptive_cut.cut([-1.0]) == 1
