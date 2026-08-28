@@ -1,10 +1,18 @@
-# Canonical source of record for JCS in this workspace.
+# Canonical source of record for JCS in this workspace, and now the ONLY copy of it.
 #
-# A consumer that cannot import this module vendors a byte-identical copy instead:
-#   * agience-cloud/deploy/canonical.py        — the deploy gate runs in a bare environment
-# `agience-cloud/deploy/test_canonical_json_check.py` asserts every vendored copy is byte-identical
-# to this file, so a divergent copy fails the build. Everyone else (crystal, ember, chorus) imports
-# `prism.canonical` directly — crystal => prism is already the dependency direction.
+# The last vendored copy was deleted 2026-08-25 [John: "it should be imported, not vendored"].
+# `agience-cloud/deploy/canonical.py` held a byte-identical copy of this file, kept in step by a
+# gate, on the stated ground that "the deploy gate runs in a bare environment". Measured: that
+# environment does not exist. The shipped installer fetches only `docker-compose.yml` and
+# `deploy/init.py`, and `init.py` imports stdlib plus `cryptography`; the copy's only consumer,
+# `deploy/bundle_manifest.py`, runs with the workspace on disk. It now imports `prism.canonical`
+# like everyone else (crystal, ember, chorus) — crystal => prism is already the dependency
+# direction, and this package's base install is dependency-free by design, so importing it costs
+# nothing that vendoring was avoiding.
+#
+# `agience-cloud/deploy/test_canonical_json_check.py` still holds the line, but from the other side:
+# it asserts the copy has NOT come back and that nothing under `deploy/` imports a bare `canonical`
+# module. A byte-identity gate is the second-best answer to a copy; not having one is the best.
 """RFC 8785 (JCS) canonical JSON — the one serialization a content address is taken over.
 
 Two hosts agree on a sha only if they agree on three independent things, and JCS pins all three:
@@ -106,8 +114,9 @@ def canonical_payload(content: Any) -> bytes:
     belongs here and not beside a caller: while "what do we hash" and "how do we canonicalise" live
     in one file, they answer as one.
 
-    Living in `canonical.py` also puts it under the vendoring gate for free: the vendored deploy
-    copy of this file is asserted byte-identical to it, so that copy answers identically too."""
+    There is no vendored copy of this file anywhere any more (see the module header): every site
+    imports it, so "answers identically" is a property of there being one implementation rather
+    than of a gate keeping two in step."""
     if isinstance(content, (bytes, bytearray)):
         return bytes(content)
     if isinstance(content, str):

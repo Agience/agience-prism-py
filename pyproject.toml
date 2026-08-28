@@ -24,8 +24,8 @@ authors = [{ name = "Ikailo Inc." }]
 #
 # ⭐ WIDENED 2026-08-04 BY `resolution` AND `adaptive_cut` (plan item D10) — DELIBERATELY, AND STILL
 # `[]`. They came from `agience-beam`, whose sixteen wire shims all said *"what stays in beam is the
-# APERTURE — `optics` `resolution` `adaptive_cut` — the three modules that need entroptics and
-# numpy."* MEASURED with numpy, entroptics and scipy blocked at the meta-path, control first: the
+# APERTURE — `optics` `resolution` `adaptive_cut` — the three modules that need the aperture and
+# numpy."* MEASURED with numpy, the aperture and scipy blocked at the meta-path, control first: the
 # first two IMPORT on bare stdlib and only `optics` refuses. They were in beam by association.
 #
 # ⛔ THEY ARE THE FIRST DERIVATIONS IN THE BASE — everything else here declares, these two compute —
@@ -61,7 +61,7 @@ vector = ["numpy>=1.24"]                                         # prism.vector 
 # Sixteen modules moved here from `agience-beam`: reach · plane · streams · carriers · frames ·
 # propagation · mcp_bridge · schema · demurrage · minting · settlement · pump · minhash ·
 # error_threshold · extraction · conservation. beam keeps the APERTURE — `optics`, and after plan
-# item D10 that is the whole of it — which needs entroptics and is private, and therefore could
+# item D10 that is the whole of it — which needs the aperture library, and therefore could
 # never come here. (`resolution` and `adaptive_cut` were named as aperture too, and were not: they
 # import on bare stdlib and went to the BASE above, not to this extra.)
 #

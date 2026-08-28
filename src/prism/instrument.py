@@ -1,11 +1,11 @@
 """The embodiment slot: what an instrument must do, and how the wire asks for one.
 
-entroptics is the generic instrument. Each domain wraps it with what that domain knows, and the
+The aperture library is the generic instrument. Each domain wraps it with what that domain knows, and the
 wrapper — the embodiment — is where the domain knowledge lives:
 
     the aperture (ember)   domain: the signal — an ordered (T, F) frame
                            knows: ontology coordinates are sparse; evidence rows are correlated
-                           needs: entroptics + numpy
+                           needs: the aperture + numpy
     beacon (mantle)        domain: the corpus — a set of vectors
                            knows: its own corpus statistics
                            needs: numpy
@@ -15,7 +15,7 @@ implementations live with their domain. At runtime the slot holds whichever embo
 injected at assembly, so the same crystal runs on a full node and on a constrained store.
 
 Nothing here computes a measurement. prism's base install is `dependencies = []`
-(`tests/test_contract_install_is_pure.py`), so this module imports neither numpy nor entroptics.
+(`tests/test_contract_install_is_pure.py`), so this module imports neither numpy nor the aperture.
 
 The four contracts:
 
@@ -38,7 +38,7 @@ and not another is a real deployment rather than a degenerate one.
 Member names and signatures are those of `ember.optics`, parameter for parameter, so that module
 satisfies `Instrument`, `Read` and `Dynamics` with no adapter. `Conservation` is filled by two
 modules: `prism.conservation` provides `energy` and `PathLedger` on numpy alone, and `ember.optics`
-provides `entropy_bits` and `joint_entropies` on entroptics. `require()` checks per member, so a
+provides `entropy_bits` and `joint_entropies` on the aperture. `require()` checks per member, so a
 host that fills part of a contract runs everything it can and names by member exactly what it
 does not fill.
 
@@ -127,7 +127,7 @@ class Screen(Protocol):
 class Instrument(Protocol):
     """The domain's wrapping of the generic instrument — what a host injects at assembly.
 
-    Filled by `ember.optics` on a full node (the aperture: entroptics + numpy, knowing that ontology
+    Filled by `ember.optics` on a full node (the aperture library + numpy, knowing that ontology
     coordinates are sparse and evidence rows correlated), and by a beacon-backed embodiment on a
     constrained store (numpy only, knowing its own corpus statistics).
 
@@ -426,7 +426,7 @@ class Dynamics(Protocol):
     autocorrelation over τ, a Takens delay, a Koopman/DMD operator over consecutive frames. The two
     embodiments differ on exactly this axis — the aperture's domain is an ordered (T, F) frame,
     beacon's is a set of vectors, and a set has no lag. A shuffled trajectory has no dynamics to
-    fit, though a fit will still return something ([[entroptics-screen-is-ordered]]).
+    fit, though a fit will still return something (the screen is ordered).
 
     An embodiment that does not fill this is a complete embodiment of a domain that does not pose
     the question, which is why it is a separate contract rather than five members a corpus store
@@ -504,7 +504,7 @@ class Conservation(Protocol):
     two embodiments can legitimately hold different opinions about them.
 
     Filled by two modules. `prism.conservation` fills `energy` and `PathLedger` on numpy alone;
-    `ember.optics` fills `entropy_bits` and `joint_entropies` on numpy plus entroptics. A full node
+    `ember.optics` fills `entropy_bits` and `joint_entropies` on numpy plus the aperture. A full node
     has both and hands over whichever the call site needs; a numpy-only host fills what it can and
     names the rest by member. `require()` is checked per member for exactly this reason.
     """
@@ -527,13 +527,13 @@ class Conservation(Protocol):
         onto [0, 1].
 
         A `Conservation` member because membership here is a dependency fact. `−Σ p log₂ p` is
-        arithmetic that cannot vary by domain — mantle's beacon computes it under entroptics' own
+        arithmetic that cannot vary by domain — mantle's beacon computes it under the upstream
         name `shannon_bits` (`mantle/search/beacon/engine.py`), and the two agree — so it is not an
         embodiment member. It is declared rather than implemented in prism because the
-        implementation is an adapter onto `entroptics.entropy.shannon_bits`, the same entropy
-        entroptics uses internally for geometry marginals, mode weights and spectra. That identity
+        implementation is an adapter onto the aperture's `entropy.shannon_bits`, the same entropy
+        it uses internally for geometry marginals, mode weights and spectra. That identity
         is its value: a caller's entropy and the instrument's own cannot drift. prism may never
-        import entroptics (the publication boundary,
+        import the aperture (the dependency boundary,
         `tests/test_contract_install_is_pure.py::PRIVATE`), so the name is declared here and filled
         by `ember.optics`.
 
@@ -568,7 +568,7 @@ class Conservation(Protocol):
         than either signal. `H_X_given_Y` and `H_Y_given_X` are different numbers: the read is
         directed, and both are returned under their own names so a call site takes the one it means.
 
-        Same membership rule as `entropy_bits`: a dependency fact. The floor is entroptics, which
+        Same membership rule as `entropy_bits`: a dependency fact. The floor is the aperture, which
         prism does not import, and the instrument's own marginals use the same implementation.
         """
 
@@ -601,8 +601,8 @@ _CONTRACTS = {
 #: file by enforcement ([[one-aperture-enforced]]), not because the three measurements are one kind.
 #:
 #: `conservation` names two modules because two fill it. `prism.conservation` stands on numpy and
-#: does not import entroptics, so `entropy_bits` and `joint_entropies` — adapters over
-#: `entroptics.entropy` — come from `ember.optics`. Naming both sends a host to inject everything
+#: does not import the aperture, so `entropy_bits` and `joint_entropies` — adapters over its
+#: entropy module — come from `ember.optics`. Naming both sends a host to inject everything
 #: the contract needs in one step.
 _FILLED_BY = {
     "embodiment": "ember.optics",

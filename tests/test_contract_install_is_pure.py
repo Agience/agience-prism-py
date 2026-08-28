@@ -16,7 +16,7 @@ Both `instrument` and `embodiment` are on the list. `instrument` is where the pr
 the bare install exactly as the original would.
 
 `instrument` is the module this file most constrains, because it is the contract for the measurement
-and so invites a measurement in it. It holds none: numpy and entroptics are unavailable on a bare
+and so invites a measurement in it. It holds none: numpy and the aperture are unavailable on a bare
 install, and a protocol that could compute would be an implementation.
 """
 from __future__ import annotations
@@ -62,20 +62,20 @@ HEAVY = {"fastapi", "uvicorn", "httpx", "mcp", "jose", "jwt", "starlette", "pyda
 # These are blocked for `prism.instrument` specifically rather than added to HEAVY: the rest of the
 # contract is not at risk of reaching for them, and a blanket ban would be a rule with no cause to
 # point at. Here the cause is exact — `instrument.py` describes what an instrument must do, and the
-# implementations that fill the slot are numpy-and-entroptics. A protocol that imported either would
+# implementations that fill the slot are numpy-and-aperture. A protocol that imported either would
 # stop being a protocol.
 SLOT_ONLY_BLOCKED = {"numpy", "beam"}
 
-# ── The publication boundary ─────────────────────────────────────────────────────────────────────
-# `entroptics` is not in HEAVY — it is numpy-only. It is private, which is a different reason to keep
-# it out. prism and mantle publish while entroptics does not, so a single import here would make the
-# published SDK depend on a package a consumer cannot install.
+# ── The dependency boundary ──────────────────────────────────────────────────────────────────────
+# This set held one non-Agience package and was emptied 2026-08-25 [John: that brand must not
+# appear in this repo]. Its stated reason was already false: the package was described as "private"
+# and as one "a consumer cannot install", and it is Apache-2.0 and public.
 #
-# mantle enforces its own half: `entroptics` is in the FORBIDDEN set of
-# `mantle/db/lattice/test_embeddable_surface.py`. This is prism's half, checked in both directions —
-# the AST pass catches a module-scope import, and the subprocess blocker catches a lazy one by making
-# the name unimportable while the contract runs.
-PRIVATE = {"entroptics"}
+# What the removal costs, measured. `SLOT_ONLY_BLOCKED` still carries `numpy` and `beam`, and the
+# subprocess blocker's own control proves it bites by making `prism.vector` fail on numpy — so the
+# blocker is still proven and the contract is still held to stdlib-only, which rejects ANY non-stdlib
+# import whether or not it is named here. What is lost is the specific reminder, not the guarantee.
+PRIVATE: set = set()
 
 BLOCKED_IN_CONTRACT = HEAVY | PRIVATE
 
@@ -178,7 +178,7 @@ print('CONTRACT OK')
 def test_the_derivations_import_with_numpy_blocked_too():
     """The derivations are in `CONTRACT` on the strength of a measurement, and this is it.
 
-    `numpy`, `entroptics` and `scipy` are blocked at the meta-path, the modules are imported for
+    `numpy` and `scipy` are blocked at the meta-path, the modules are imported for
     real, and their public surface is then exercised — an import that resolves nothing proves only
     that the file parses. The control runs first: a `meta_path` finder that silently does not fire
     would report a numpy-dependent module as stdlib-floored.
@@ -189,7 +189,7 @@ def test_the_derivations_import_with_numpy_blocked_too():
     program = """
 import sys
 
-BLOCKED = ('numpy', 'entroptics', 'scipy')
+BLOCKED = ('numpy', 'scipy')
 
 class _Blocker:
     def find_module(self, name, path=None):
@@ -256,7 +256,7 @@ def test_a_derivation_never_imports_the_aperture(module):
     """A derivation reaches `resolvable` through the injected contract, never by importing L3.
 
     The short way to reach `resolvable` from prism is a direct import of the optics package, which
-    would put a private, numpy-and-entroptics package on the published SDK's runtime path and point
+    would put a heavy numpy-and-aperture package on the published SDK's runtime path and point
     L1 at L3. The derivations resolve `instrument.require(..., contract='read')` instead — the same
     door `frames.absorb_at_tekton` uses.
 
@@ -271,7 +271,7 @@ def test_a_derivation_never_imports_the_aperture(module):
             named.add(node.module.split(".")[0])
     assert "beam" not in named, (
         f"prism/{module}.py imports `beam`. prism is L1 and publishes; beam is L3 and carries "
-        f"entroptics, which is private. The aperture reach goes through `instrument.require(..., "
+        f"the aperture library. The aperture reach goes through `instrument.require(..., "
         f"contract='read')`, the same door `frames.absorb_at_tekton` uses.")
 
 
@@ -386,15 +386,15 @@ assert len(E.INSTRUMENT_MEMBERS) == 3, (
     'ever fill this contract if it stays the propagation surface')
 
 # ── `Conservation` spans two real deployments, and names all four members ──
-# The arithmetic is split: `prism.conservation` has numpy and no entroptics, `ember.optics` has
-# entroptics and no ledger. Both are real hosts, so both must read as partial rather than as
+# The arithmetic is split: `prism.conservation` has numpy and no aperture, `ember.optics` has
+# the aperture and no ledger. Both are real hosts, so both must read as partial rather than as
 # conforming, and the result must say which name is missing. Asserted in both directions, so that
 # neither a removal of a member nor a widening back to two passes silently.
-class _Accountant:                          # the shape `prism.conservation` has: numpy, no entroptics
+class _Accountant:                          # the shape `prism.conservation` has: numpy, no aperture
     def energy(self, frame): return 0.0
     def PathLedger(self, incident, **kw): return None
 
-class _EntropyOnly:                         # the shape `ember.optics` has: entroptics, no ledger
+class _EntropyOnly:                         # the shape `ember.optics` has: the aperture, no ledger
     def entropy_bits(self, weights): return 0.0
     def joint_entropies(self, fx, fy, mx=None, my=None): return {{}}
 
@@ -417,7 +417,7 @@ assert len(E.CONSERVATION_MEMBERS) == 4, (
     'belongs on Instrument, Read or Dynamics.')
 
 # The result names the missing member, as well as the contract. A partial accountant is a real
-# deployment (numpy without entroptics), so what it cannot do is legible from outside.
+# deployment (numpy without the aperture), so what it cannot do is legible from outside.
 try:
     E.require(_Accountant(), 'entropy_bits', contract='conservation', at='the check')
 except E.InstrumentRequired as exc:
@@ -427,7 +427,7 @@ except E.InstrumentRequired as exc:
         'constrained host from an unwired one: %s' % exc)
     assert exc.http_status == 503
 else:
-    raise AssertionError('a numpy-only accountant computed an entroptics-floored entropy')
+    raise AssertionError('a numpy-only accountant computed an aperture-floored entropy')
 # …and the two members it does fill still resolve, so the host runs everything it can measure.
 E.require(_Accountant(), 'energy', contract='conservation', at='the check')
 E.require(_Accountant(), 'PathLedger', contract='conservation', at='the check')
@@ -471,7 +471,7 @@ print('SLOT OK')
     r = subprocess.run([sys.executable, "-c", program], capture_output=True, text=True,
                        cwd=str(PRISM.parents[1]))
     assert "SLOT OK" in r.stdout, (
-        "the embodiment contract could not be imported with numpy/beam/entroptics blocked:\n"
+        "the embodiment contract could not be imported with numpy/beam blocked:\n"
         + (r.stderr or r.stdout)[-2500:])
 
 

@@ -75,7 +75,35 @@ def test_ops_route_to_crystal(urls):
 
 
 def test_crud_and_search_stay_on_mantle(urls):
+    """This pins which base is chosen, and that is all it ever pinned.
+
+    It passed while `search_query` posted to `/search/query` — a path mantle does not serve and
+    never has. The routing was right and the target was dead, and a test named for "search" gave
+    no sign. The URL is now the real one; `test_the_search_target_is_a_route_mantle_serves`
+    below checks the half this one cannot see."""
     c = _client()
     asyncio.run(c.get_artifact("art-1"))
     asyncio.run(c.search_query(query_text="hello"))
-    assert urls == [f"{MANTLE}/artifacts/art-1", f"{MANTLE}/search/query"]
+    assert urls == [f"{MANTLE}/artifacts/art-1", f"{MANTLE}/artifacts/recall"]
+
+
+def test_the_search_target_is_a_route_mantle_serves():
+    """The half the routing test cannot reach: does the path EXIST?
+
+    Checked against mantle's live route table when it is checked out beside prism — not
+    against a remembered list, which is how `/search/query` survived. Skipped when it is not,
+    so this SDK stays testable alone."""
+    import pathlib
+    import re
+
+    ws = pathlib.Path(__file__).resolve().parents[4]
+    mantle_src = ws / "agience-mantle" / "src"
+    if not mantle_src.is_dir():
+        import pytest
+        pytest.skip("agience-mantle not checked out beside prism")
+
+    src = (mantle_src / "mantle" / "routers" / "artifacts_router.py").read_text(
+        encoding="utf-8")
+    served = set(re.findall(r'@router\.\w+\(\s*"([^"]+)"', src))
+    assert "/recall" in served, (
+        "the artifacts router no longer declares /recall; this SDK targets /artifacts/recall")

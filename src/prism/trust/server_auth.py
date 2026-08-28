@@ -569,16 +569,24 @@ class ServerAuth:
     def decrypt_jwe(self, jwe: dict) -> str:
         """No JWE decryption path exists in this module.
 
-        Secret values live in `vnd.agience.secret+json` artifacts, whose `fetch` operation
-        decrypts on read for authorized callers (dispatched to
-        `secrets_service.fetch_secret_material` in Mantle). This shim exists only so a caller
-        still presenting a JWE envelope fails fast rather than silently doing nothing.
+        A credential value is the CONTENT of an ordinary artifact: the write boundary encrypts it
+        at rest, and the read path decrypts it for a caller the light cone already authorised. So
+        there is nothing for this shim to do — it exists only so a caller still presenting a JWE
+        envelope fails fast rather than silently doing nothing.
+
+        CORRECTED 2026-08-25. This docstring named two things that DO NOT EXIST: the content type
+        `vnd.agience.secret+json`, which is defined nowhere in the workspace, and a `fetch`
+        operation dispatched to `secrets_service.fetch_secret_material` in Mantle, where neither
+        that module nor that function is present. The real type is
+        `application/vnd.agience.credential+json` (`mantle/services/bootstrap_types.py`, written by
+        `seed_provisioning/platform_email.py`), and it needs no operation dispatch or type handler:
+        reading the artifact IS the read.
         """
         del jwe
         raise NotImplementedError(
-            "JWE decryption removed in Phase C. Secrets become "
-            "vnd.agience.secret+json artifacts in Phase D — read via the "
-            "artifact API and decrypt via the type handler."
+            "JWE decryption was removed. A credential is an ordinary artifact whose content is "
+            "encrypted at rest: read it through the artifact API, which decrypts for an "
+            "authorised caller. There is no envelope for this method to open."
         )
 
 

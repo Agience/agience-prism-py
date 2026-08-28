@@ -118,9 +118,18 @@ class Host:
 
         # Platform connection (optional). When both are present the host
         # self-registers on start; otherwise it just serves (standalone).
-        # Registration target is the canonical MANTLE_URI (§4) — resolved with
-        # no fabricated localhost default so registration stays strictly opt-in.
-        self.api_uri = (api_uri or config.resolve("MANTLE_URI", default="") or "").rstrip("/")
+        #
+        # THE TARGET IS `EMBER_URI`, NOT `MANTLE_URI`, SINCE 2026-08-26. This read
+        # `MANTLE_URI` and called it "the canonical registration target (§4)", and measured that
+        # day, mantle serves no `/hosts` route at all — 0 of 66 mounted — while every deployment
+        # on disk resolves `MANTLE_URI` to a real mantle node. The receiver has been on the ember
+        # leaf (`ember/surface/serve.py`) since 2026-07-21, so the sender and the receiver were on
+        # different services and every host announced nothing, on every start, into a 404.
+        #
+        # Still resolved with `default=""` — NOT the localhost default in the config table — so
+        # registration stays strictly opt-in. A host that names no leaf must not start posting at
+        # `localhost:8091` because a default existed.
+        self.api_uri = (api_uri or config.resolve("EMBER_URI", default="") or "").rstrip("/")
         self.token = token or os.getenv("AGIENCE_TOKEN")
         self._warmup = warmup
         self._operators: list[str] = []
@@ -203,8 +212,19 @@ class Host:
         No token -> standalone mode: the host just serves, and an operator like
         embeddings is wired by pointing the platform's ``EMBEDDINGS_URI`` at it.
         Registration never blocks serving.
+
+        The target is the ember leaf (``EMBER_URI``), which holds the store the registration
+        writes to and the ``EMBER_INVOKE_TOKEN`` gate that protects it.
         """
         if not (self.api_uri and self.token):
+            # Say which half is missing when the other is present. Returning in silence is right
+            # for a standalone host (neither set), but a host that was GIVEN a token and no leaf
+            # was configured to register and cannot — and the old code was silent in both cases,
+            # which is how a registration that never happened looks identical to one not wanted.
+            if self.token and not self.api_uri:
+                log.warning(
+                    "host %r has a token but no leaf to register with: set EMBER_URI (or pass "
+                    "api_uri=). It will serve, but its operators are NOT announced.", self.name)
             return
         try:
             import httpx
@@ -215,7 +235,24 @@ class Host:
                     headers={"Authorization": f"Bearer {self.token}"},
                     json={"name": self.name, "operators": self._operators},
                 )
-            log.info("self-register -> %s (%s)", self.api_uri, resp.status_code)
+            # A REFUSAL IS NOT A REGISTRATION. This logged `info` on every reply, so a 404
+            # from a base that serves no such route read exactly like a success. Measured
+            # 2026-08-26, that is the LIVE case and not a hypothetical: every deployment resolves
+            # `MANTLE_URI` to a mantle node, and mantle serves no `/hosts` route at all (0 of 66
+            # mounted). So every prism host has been posting into a 404 on every start since the
+            # SDK shipped, its operators never announced, and the one line that could have said so
+            # reported the 404 at `info` in the same shape as a success.
+            #
+            # This does NOT settle where registration belongs — `ember/surface/serve.py`
+            # serves `/hosts/register` on the local leaf, and which service owns it is an open
+            # routing question. What it settles is that a refusal is audible either way.
+            if resp.status_code >= 400:
+                log.warning(
+                    "self-register REFUSED by %s: HTTP %s. This host is serving, but its operators "
+                    "are NOT announced — nothing can dispatch to them.",
+                    self.api_uri, resp.status_code)
+            else:
+                log.info("self-register -> %s (%s)", self.api_uri, resp.status_code)
         except Exception as exc:
             log.warning("self-register failed (non-fatal): %s", exc)
 

@@ -72,15 +72,34 @@ class AgienceClient:
         candidate_budget: int = 200,
         include_vectors: bool = False,
     ) -> dict:
-        """Call the raw query primitive — returns the caller's authorized candidates."""
-        body: dict = {"candidate_budget": candidate_budget, "include_vectors": include_vectors}
+        """Call the raw query primitive — returns the caller's authorized candidates.
+
+        This posted to `/search/query`, which Mantle does not serve. Its top-level segments
+        are artifacts, auth, docs, events, git, grants, mcp, status, system, v2 and version —
+        there is no `search` plane and there has not been one. The primitive is `POST /artifacts/recall`
+        with `candidates: true`, which is exactly what this method describes: the narrowed,
+        unranked, unhydrated set.
+
+        `tests/server/test_client_routing.py` passed throughout, because it pins WHICH BASE the
+        path is sent to and not whether the path exists. The routing was right and the target was
+        not.
+
+        `embedding` is sent as `vector`, recall's query-side ingress and the same `array[number]`.
+        `embedding` was retired on the API and is IGNORED there, so the old name would
+        have been dropped in silence even once the path was right.
+        """
+        body: dict = {"candidates": True, "candidate_budget": candidate_budget}
         if query_text:
             body["query_text"] = query_text
         if embedding is not None:
-            body["embedding"] = embedding
+            body["vector"] = embedding
         if scope:
             body["scope"] = scope
-        return await self.post("/search/query", json=body)
+        # `include_vectors` is accepted for compatibility and sent NOWHERE: the candidate set
+        # carries no vectors — recall answers `model_id: null` because nothing on that path
+        # retrieves by embedding. Passing it has never had an effect and now says so.
+        _ = include_vectors
+        return await self.post("/artifacts/recall", json=body)
 
     async def invoke(
         self,

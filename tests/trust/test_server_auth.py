@@ -469,7 +469,7 @@ def test_the_module_imports_with_every_web_package_blocked():
     program = """
 import sys
 
-BLOCKED = ('httpx', 'fastapi', 'starlette', 'uvicorn', 'mcp', 'requests', 'aiohttp', 'entroptics')
+BLOCKED = ('httpx', 'fastapi', 'starlette', 'uvicorn', 'mcp', 'requests', 'aiohttp')
 
 class _Blocker:
     def find_module(self, name, path=None):

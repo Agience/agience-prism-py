@@ -61,19 +61,19 @@ class PumpLoop:
         threads — `start()` runs `_run` on a daemon thread, and `respond()` → `prism.pump.resolve`
         calls `tick()` on the caller's thread — and with the pass unserialised both could enter
         `Reactor.pump` on the same reactors, both reach the conversation tekton, and both call
-        `numpy.linalg.eigh` (`entroptics/reads.py:262`) concurrently. `eigh` is not concurrency-safe
+        `numpy.linalg.eigh` (in the aperture's reads) concurrently. `eigh` is not concurrency-safe
         on this box's OpenBLAS: concurrent calls from independent threads can crash the process
         (access violation) or hang, and a clean run of the underlying probe is not evidence of
         absence — the fault is intermittent by nature.
 
         The BLAS defect itself remains, out of reach through this door. Any two threads calling into
-        entroptics can fault, so a process that may do so pins the BLAS pool
+        the aperture can fault, so a process that may do so pins the BLAS pool
         (`OPENBLAS_NUM_THREADS=1`) — including any ASGI host serving sync endpoints off a threadpool.
         The pin travels with the package: `prism/__init__.py` sets it via `os.environ.setdefault`
-        above its imports, and the same line is in `mantle`, `ember`, `prism` and `entroptics`, every
+        above its imports, and the same line is in `mantle`, `ember`, `prism` and the aperture, every
         package that calls into LAPACK. It sits at package scope because OpenBLAS sizes its pool when
         the library loads, so setting the variable after `import numpy` is inert (see
-        `test_blas_thread_pin.py` in `ember`, `mantle` and `entroptics`). Two further limits apply:
+        `test_blas_thread_pin.py` in `ember`, `mantle` and the aperture). Two further limits apply:
         `setdefault` yields to an operator's exported value, and a process that imported numpy before
         the package is beyond the pin's reach."""
         with self._lock:

@@ -28,8 +28,8 @@ canonical_string` costs nothing.
 The wire lives here too: reach · plane · streams · carriers · frames · propagation · mcp_bridge ·
 schema · demurrage · minting · settlement · pump · minhash · error_threshold · extraction ·
 conservation. The members that need numpy or cryptography are covered by `[wire]`; the rest import
-on the bare install. The aperture — the entroptics instrument — is reached by injection
-(`prism.instrument`), never by import: entroptics is private, and a published SDK depends only on
+on the bare install. The aperture is reached by injection
+(`prism.instrument`), never by import: the base install is dependency-free, and a published SDK depends only on
 packages its consumers can install.
 """
 from __future__ import annotations

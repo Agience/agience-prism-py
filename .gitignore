@@ -50,7 +50,9 @@ node_modules/
 *.tsbuildinfo
 
 # --- IDE / OS ---
-.vscode/
+.vscode/*
+# the Mantle MCP server, tracked deliberately -- agience-build/scripts/mcp_config.py
+!.vscode/mcp.json
 .idea/
 *.swp
 *.swo
