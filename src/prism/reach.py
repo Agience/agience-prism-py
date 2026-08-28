@@ -51,13 +51,13 @@ EVIDENCE_CT = "application/vnd.agience.evidence+json"
 GROUND = "ground"
 
 # ── the false-alarm level is a property of the null, so the router takes a null ───────────────────────
-# Entroptics' `null_providers` header states it: the cutoff is one decision, so the provider owns both
+# The aperture's `null_providers` header states it: the cutoff is one decision, so the provider owns both
 # the threshold and the alpha it is drawn at, and a provider that pins its own level uses that level
 # for any `far` passed beside it.
 #
 # `Provider(..., null=...)` is the surface. An observer on a noisier substrate hands this router a null
 # that holds its opinion (`correlated_null(far=…)` / `derived_null(far=…)` from the optics package),
-# and the level travels with the cutoff it sets. `null=None` runs on entroptics' own derived default —
+# and the level travels with the cutoff it sets. `null=None` runs on the aperture's own derived default —
 # the library's number, left in the library.
 
 
@@ -304,7 +304,7 @@ class Provider:
         try:
             # The caller's noise provider travels with the read. The cutoff and the alpha it is drawn
             # at are one decision and the provider owns both (see the note at the head of this
-            # module); `None` runs on entroptics' own derived default. A provider is the surface on
+            # module); `None` runs on the aperture's own derived default. A provider is the surface on
             # which a noisier substrate states something true about itself, being the one that sees
             # the data.
             hop = next_by_coupling(frame, self._bases, fired=path, null=self._null)

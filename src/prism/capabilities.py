@@ -20,7 +20,7 @@ Two mechanisms stand behind a capability, on two different boundaries:
   * **hardware** — what a prism can physically do. Found by propagation (`prism.propagation`:
     `screened_accumulate` for *nearest*, `spread_graph` for *hop the gap and propagate from there*).
   * **permission** — what the energy is granted. CRUDEASIO grants through the lightcone
-    (`mantle/db/lattice/access.py`), which is the one decision point for access everywhere else in
+    (`mantle/db/access.py`), which is the one decision point for access everywhere else in
     the system ([[access-is-crudeasio-grants]]).
 
 Authorization follows the grant on the energy: holding the string `fs.write` grants nothing. Each
@@ -76,7 +76,7 @@ def is_known_capability(kind: str) -> bool:
         nearest sufficiently-energised one, so `sensor.temperature` reaches `sensor.capture` by
         nearness. Deciding a match here would be the set-membership shape the propagation model
         replaces ([[signals-propagate]]).
-      * **permitted** → the grant on the energy (`mantle/db/lattice/access.py`).
+      * **permitted** → the grant on the energy (`mantle/db/access.py`).
 
     Use this rather than `kind in CAPABILITY_KINDS`: bare membership excludes every real device
     (`sensor.temperature`), which is precisely the plug-and-play case. A bare family prefix is not

@@ -62,7 +62,7 @@ def _read_member(member: str, *, at: str):
     """The named member of the injected `read` contract, or raise.
 
     The one door onto the instrument from this module and from `adaptive_cut`. It is a door rather
-    than an import because prism publishes and entroptics does not, so this package does not import
+    than an import because the base install is dependency-free, so this package does not import
     the aperture. `instrument.require` is the same door `frames` and `reach` use, so an empty or
     partial slot raises `InstrumentRequired` — one exception type, one message, naming the contract,
     the member and the operation.

@@ -1,4 +1,4 @@
-"""The decay / attenuation law entroptics governs — applied, in one place.
+"""The decay / attenuation law the aperture governs — applied, in one place.
 
 `ember.optics` measures: it reads a length or a rate off an ordered frame through the aperture
 (`correlation_length`, `diffraction`, `decay_profile`, `fit_dynamics`). This module applies the

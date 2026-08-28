@@ -57,8 +57,8 @@ def canonical_json(obj: Any) -> bytes:
     """RFC 8785 (JCS) canonical JSON bytes — re-exported from the one source, `prism.canonical`.
 
     Available under this name because importers reach it as `crystal_model.canonical_json`; the
-    implementation lives in `prism/canonical.py` so a bare environment can vendor a byte-identical
-    copy (that vendoring is gated — see that module's header).
+    implementation lives in `prism/canonical.py`, which is now the only copy of it in the workspace
+    — the last vendored copy was deleted 2026-08-25 (see that module's header).
     """
     return _canonical_json(obj)
 

@@ -35,3 +35,12 @@ pip install "agience-prism-py[all]"
 ```
 
 Reaching a surface without its extra raises an `ImportError` naming the extra to install.
+
+## License
+
+Apache-2.0 - see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Contributing:
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+Prism is permissive **deliberately**: build on Agience over the wire with no copyleft reaching
+your code. The base install has no dependencies, so depending on it costs nothing.
+

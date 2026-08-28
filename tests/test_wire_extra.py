@@ -2,7 +2,7 @@
 
 Sixteen modules make up the wire — reach · plane · streams · carriers · frames · propagation ·
 mcp_bridge · schema · demurrage · minting · settlement · pump · minhash · error_threshold ·
-extraction · conservation. The aperture is not among them: it needs entroptics, which is private and
+extraction · conservation. The aperture is not among them: it needs a heavy numpy stack, and
 cannot ship in a published SDK. `resolution` and `adaptive_cut` are not among them either — they
 need neither numpy nor cryptography, so they sit in the dependency-free base, and
 `tests/test_contract_install_is_pure.py` owns their floor.
@@ -16,7 +16,7 @@ Four properties are pinned here.
 
   2. **The wire does not drag the aperture.** `frames` and `reach` each take exactly one measurement
      through the aperture, and the short way to keep them working is a direct import — which would
-     invert the DAG and put a private, numpy-and-entroptics package on the published SDK's install
+     invert the DAG and put a heavy numpy-and-aperture package on the published SDK's install
      path. `test_the_wire_imports_with_the_aperture_unimportable` makes the aperture unimportable
      and imports the whole wire anyway.
 
@@ -169,7 +169,7 @@ else:
 
 print('WIRE OK')
 """
-    r = _blocked_run({"entroptics", "beam"}, body)
+    r = _blocked_run({"beam"}, body)
     assert "WIRE OK" in r.stdout, (
         "the wire could not be imported with the aperture blocked:\n" + (r.stderr or r.stdout)[-3000:])
 

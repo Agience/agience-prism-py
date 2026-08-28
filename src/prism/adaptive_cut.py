@@ -33,7 +33,7 @@ makes it code rather than a protocol member.
 
 `resolvable` is a declared member of the `read` contract (`instrument.READ_MEMBERS`), so the three
 reaches for it resolve the injected slot; prism is the published, dependency-free SDK and the private
-numpy-and-entroptics package stays behind that slot. A full node registers the optics module as the
+numpy-and-aperture package stays behind that slot. A full node registers the optics module as the
 process default, so a caller that passes nothing gets an answer; an empty slot lands where an
 unreadable frame lands, on `None` and then the baseline.
 """
@@ -104,12 +104,12 @@ def _k_signal(rel) -> int:
     """The resolved-mode count above the aperture's own noise floor. 0 = indistinguishable from
     noise; >=1 = coherent structure; `None` when the aperture has no reading for this frame.
 
-    The read goes through the injected `read` contract rather than calling `entroptics.read()`
+    The read goes through the injected `read` contract rather than calling the aperture directly
     directly. The optics wrapper exists because `read()`/`Screen()` enter past the streaming front
     door and apply the entropy fold guard the library documents as destroying a sparse carrier —
     measured at 256 feature channels folded to F_eff = 1 and reported as `K_signal = 1`, which at the
     call site looks the same as "there is one real mode". Ontology coordinates are sparse, so every
-    entroptics read goes through the wrapper.
+    aperture read goes through the wrapper.
 
     A 1-D column is not a frame. `rel.reshape(-1, 1)` asks the aperture about a line, and the wrapper
     has no reading below F = 2, so `None` comes back and the caller keeps its baseline."""
