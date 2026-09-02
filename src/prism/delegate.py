@@ -14,7 +14,7 @@ The invariants an implementation holds, one line each:
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, Protocol, runtime_checkable
 
 #: The person a delegate belongs to when a host has no identity of its own yet.
 LOCAL_PERSON = "local"

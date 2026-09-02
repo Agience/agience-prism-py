@@ -1,18 +1,7 @@
-# Canonical source of record for JCS in this workspace, and now the ONLY copy of it.
-#
-# The last vendored copy was deleted 2026-08-25 [John: "it should be imported, not vendored"].
-# `agience-cloud/deploy/canonical.py` held a byte-identical copy of this file, kept in step by a
-# gate, on the stated ground that "the deploy gate runs in a bare environment". Measured: that
-# environment does not exist. The shipped installer fetches only `docker-compose.yml` and
-# `deploy/init.py`, and `init.py` imports stdlib plus `cryptography`; the copy's only consumer,
-# `deploy/bundle_manifest.py`, runs with the workspace on disk. It now imports `prism.canonical`
-# like everyone else (crystal, ember, chorus) — crystal => prism is already the dependency
-# direction, and this package's base install is dependency-free by design, so importing it costs
-# nothing that vendoring was avoiding.
-#
-# `agience-cloud/deploy/test_canonical_json_check.py` still holds the line, but from the other side:
-# it asserts the copy has NOT come back and that nothing under `deploy/` imports a bare `canonical`
-# module. A byte-identity gate is the second-best answer to a copy; not having one is the best.
+# The canonical source of record for JCS, and the only copy of it. Every consumer imports it from
+# here rather than vendoring it: this package's base install is dependency-free, so importing it
+# costs nothing that a copy would avoid, and two copies of the function that decides every content
+# address agree only for as long as someone keeps them in step.
 """RFC 8785 (JCS) canonical JSON — the one serialization a content address is taken over.
 
 Two hosts agree on a sha only if they agree on three independent things, and JCS pins all three:

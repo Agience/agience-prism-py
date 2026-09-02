@@ -23,9 +23,10 @@ Where bundles come from, in order:
   2. A file the host bound to the group with `register_group(name, path)` — for a payload that
      lives outside the shipped directory (a third-party tekton's bundle beside its own package).
      sha-verified against its own manifest, exactly like (3).
-  3. The shipped data files `agience-observe/bundles/<group>.json`, built from chorus
-     `definitions/bundles/`. Same bytes, same sha the mesh carries; it exists so an offline node
-     bootstraps with no chorus checkout and no store bundle. sha-verified against its own manifest.
+  3. The data files `<group>.json` under `$AGIENCE_BUNDLE_ROOT`, published by the same build that
+     produces the mesh artifacts. Same bytes, same sha the mesh carries; it exists so an offline
+     node bootstraps with no store bundle. sha-verified against its own manifest. Unset, this route
+     is simply absent — prism resolves no path of its own.
 
 Version-pinned per process: the first successful load of a group pins that bundle for the process
 lifetime — one logical runtime runs one version of an operator throughout; a restart picks up newer
@@ -83,7 +84,6 @@ import sys
 import threading
 from pathlib import Path
 from typing import Dict, Optional
-from prism.canonical import canonical_string as _jcs_string
 
 log = logging.getLogger(__name__)
 
@@ -91,29 +91,26 @@ BUNDLE_CONTENT_TYPE = "application/vnd.agience.bundle+json"
 BUNDLE_ARTIFACT_PREFIX = "bundle-"
 
 def _data_dir() -> Optional[Path]:
-    """Where the shipped bundle files live — in `agience-observe`, never inside a host package.
+    """Where the shipped bundle files live — named by the deployment, never inside this package.
 
-    Resolution order, and every step is explicit rather than guessed:
+    Resolution order, and both steps are explicit rather than guessed:
       1. `$AGIENCE_BUNDLE_ROOT` — what a deployment sets. Points at the directory holding
-         `<group>.json`, or at the `agience-observe` checkout containing `bundles/`.
-      2. The sibling `agience-observe/bundles/` next to this checkout — the developer case.
-      3. None. There is no in-package fallback, deliberately: a silent fallback to a stale embedded
-         copy is exactly how two versions of a content-addressed payload start to disagree, and the
-         sha gate would then be verifying the wrong bytes faithfully.
+         `<group>.json`, or at a checkout containing `bundles/`.
+      2. None. There is no in-package fallback and no walk to a sibling checkout: a silent fallback
+         to a stale embedded copy is how two versions of a content-addressed payload start to
+         disagree, and the sha gate would then verify the wrong bytes faithfully. A path derived
+         from where this file happens to sit is the same fallback wearing a directory name.
 
     Returning None is not an error here — the store is the primary source (path 1 in the module
-    docstring) and a node with its bundles in the lattice needs no files at all. `_bundle_from_data`
-    raises when the absence is actually reached.
+    docstring), a host binds its own payloads with `register_group`, and a node with its bundles in
+    the lattice needs no files at all. `_bundle_from_data` raises when the absence is actually
+    reached.
     """
     raw = os.getenv("AGIENCE_BUNDLE_ROOT", "").strip()
     candidates = []
     if raw:
         p = Path(raw).expanduser()
         candidates += [p, p / "bundles"]
-    # …/<workspace>/agience-prism/py/src/prism/runner.py -> …/<workspace>/agience-observe
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        candidates.append(parent / "agience-observe" / "bundles")
     for c in candidates:
         try:
             if c.is_dir():
@@ -225,7 +222,7 @@ def register_group(name: str, path) -> None:
     if not p.is_file():
         raise FileNotFoundError(
             "register_group(%r, %s): no such bundle payload file. Register the path of a built "
-            "`<group>.json` (agience-observe/build_bundles.py writes them)" % (group, p))
+            "`<group>.json`" % (group, p))
     _HOST_GROUPS[group] = p.resolve()
 
 
@@ -519,14 +516,14 @@ def _bundle_from_data(group: str) -> dict:
         # Name all three places that were looked and how to supply each, so the message separates
         # "nothing carries this" from "the payload here is corrupt".
         raise UnknownBundleGroupError(
-            "no bundle for group %r. A group EXISTS when its sha-verified payload does, so this is "
+            "no bundle for group %r. A group exists when its sha-verified payload does, so this is "
             "the whole answer: the store has no `bundle-%s` artifact, no host registered a file for "
-            "it, and %s. Supply it by building `agience-observe/bundles/%s.json` (add the group to "
-            "bundle_spec.json and run build_bundles.py), by publishing a `bundle-%s` artifact, or by "
-            "calling prism.runner.register_group(%r, path) at boot. Discoverable here: %s. "
-            "There is deliberately no in-package copy to fall back to: a second copy of a "
-            "content-addressed payload can drift from the one the mesh carries, and the sha gate "
-            "would then verify the wrong bytes faithfully."
+            "it, and %s. Supply it by placing a built `%s.json` under $AGIENCE_BUNDLE_ROOT, by "
+            "publishing a `bundle-%s` artifact, or by calling "
+            "prism.runner.register_group(%r, path) at boot. Discoverable here: %s. "
+            "There is no in-package copy to fall back to: a second copy of a content-addressed "
+            "payload can drift from the one the mesh carries, and the sha gate would then verify "
+            "the wrong bytes faithfully."
             % (group, group,
                ("no shipped bundle directory was found — set AGIENCE_BUNDLE_ROOT to one"
                 if _DATA_DIR is None else "%s is missing" % (_DATA_DIR / (group + ".json"))),

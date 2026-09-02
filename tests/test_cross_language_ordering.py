@@ -99,7 +99,7 @@ def test_the_order_is_by_utf8_bytes_and_astral_characters_are_where_it_shows():
     """
     hlc = "2026-01-01T00:00:00Z"
     leaves = [{"hlc": hlc, "id": i} for i in ("\U00010000", "�", "z")]
-    assert [l["id"] for l in sorted(leaves, key=_leaf_order)] == ["z", "�", "\U00010000"]
+    assert [leaf["id"] for leaf in sorted(leaves, key=_leaf_order)] == ["z", "�", "\U00010000"]
 
     utf16_order = sorted(("\U00010000", "�", "z"), key=lambda s: s.encode("utf-16-be"))
     assert utf16_order != ["z", "�", "\U00010000"], (
@@ -112,7 +112,7 @@ def test_hlc_outranks_id():
     from different moments."""
     leaves = [{"hlc": "2026-01-02T00:00:00Z", "id": "a"},
               {"hlc": "2026-01-01T00:00:00Z", "id": "z"}]
-    assert [l["id"] for l in sorted(leaves, key=_leaf_order)] == ["z", "a"]
+    assert [leaf["id"] for leaf in sorted(leaves, key=_leaf_order)] == ["z", "a"]
 
 
 def test_a_leaf_missing_hlc_or_id_still_orders():

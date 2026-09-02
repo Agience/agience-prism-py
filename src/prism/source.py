@@ -11,7 +11,7 @@ other.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, Optional, Protocol, runtime_checkable
+from typing import Dict, Iterable, Protocol, runtime_checkable
 
 #: The provenance an observation carries by default: `Provenance.OBSERVED`, falling back to the
 #: equivalent plain string on an install that does not carry `prism.mass`.

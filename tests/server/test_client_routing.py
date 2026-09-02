@@ -61,49 +61,27 @@ def test_crystal_uri_defaults_from_env():
 
 
 def test_ops_route_to_crystal(urls):
+    """Every method that reaches Crystal, and the full URL each one builds."""
     c = _client()
     asyncio.run(c.invoke("art-1", "do_thing", {"x": 1}))
     asyncio.run(c.create("vnd.agience.note+json", container_id="w1"))
     asyncio.run(c.resolve("vnd.agience.note+json"))
-    asyncio.run(c.embed({"text": "hi"}))
     assert urls == [
         f"{CRYSTAL}/artifacts/art-1/op/invoke",
         f"{CRYSTAL}/create",
         f"{CRYSTAL}/resolve/vnd.agience.note+json",
-        f"{CRYSTAL}/embed",
     ]
 
 
 def test_crud_and_search_stay_on_mantle(urls):
-    """This pins which base is chosen, and that is all it ever pinned.
+    """Which base is chosen, and the full URL that is built on it.
 
-    It passed while `search_query` posted to `/search/query` — a path mantle does not serve and
-    never has. The routing was right and the target was dead, and a test named for "search" gave
-    no sign. The URL is now the real one; `test_the_search_target_is_a_route_mantle_serves`
-    below checks the half this one cannot see."""
+    The base and the path fail differently: routing to the right plane and posting to a path the
+    server does not serve produces a well-formed request and a 404, and a test that asserted only
+    the base would report that as correct. Both are pinned. Whether the server declares the route
+    is the server's own check to run — prism has no way to see it.
+    """
     c = _client()
     asyncio.run(c.get_artifact("art-1"))
     asyncio.run(c.search_query(query_text="hello"))
     assert urls == [f"{MANTLE}/artifacts/art-1", f"{MANTLE}/artifacts/recall"]
-
-
-def test_the_search_target_is_a_route_mantle_serves():
-    """The half the routing test cannot reach: does the path EXIST?
-
-    Checked against mantle's live route table when it is checked out beside prism — not
-    against a remembered list, which is how `/search/query` survived. Skipped when it is not,
-    so this SDK stays testable alone."""
-    import pathlib
-    import re
-
-    ws = pathlib.Path(__file__).resolve().parents[4]
-    mantle_src = ws / "agience-mantle" / "src"
-    if not mantle_src.is_dir():
-        import pytest
-        pytest.skip("agience-mantle not checked out beside prism")
-
-    src = (mantle_src / "mantle" / "routers" / "artifacts_router.py").read_text(
-        encoding="utf-8")
-    served = set(re.findall(r'@router\.\w+\(\s*"([^"]+)"', src))
-    assert "/recall" in served, (
-        "the artifacts router no longer declares /recall; this SDK targets /artifacts/recall")

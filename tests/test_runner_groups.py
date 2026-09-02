@@ -34,8 +34,9 @@ from prism.crystal_model import bundle_canonical
 
 # ── Synthetic bundles: built through the same canonicalization the runner verifies with ──────────
 #
-# Built here rather than copied from `agience-observe/bundles/`: a group prism has never seen is the
-# thing under test, and a shipped payload would exercise the ones already known to load.
+# Every payload here is built in the test. Prism resolves no bundle directory of its own — the
+# shipped route is whatever `$AGIENCE_BUNDLE_ROOT` names — so a test that reached for a real payload
+# would be testing whoever published it. A group prism has never seen is the thing under test.
 
 def _demo_source(group: str) -> str:
     return (
@@ -91,36 +92,40 @@ def _log(tmp_path: Path) -> Path:
 def test_the_group_list_is_DISCOVERED_from_payloads_not_declared(isolated, monkeypatch):
     """`known_groups()` reads the bundle directory, and `GROUPS` is that reading.
 
-    Fails if `GROUPS` becomes a tuple literal: the second half drops a payload into a fresh
-    directory and expects it to appear.
+    Fails if `GROUPS` becomes a tuple literal: this drops a payload into a fresh directory and
+    expects it to appear, with prism never having heard the name.
     """
-    real = runner.known_groups()
-    assert set(real) >= {"arithmetic", "operators", "dev_ops", "docs_ops", "corpus", "fetch"}, real
-    assert runner.GROUPS == real, "GROUPS drifted from the measurement it is supposed to BE"
-
     monkeypatch.setattr(runner, "_DATA_DIR", isolated)
     assert runner.known_groups() == (), "a payload-free directory reported groups"
+    assert runner.GROUPS == (), "GROUPS drifted from the measurement it is supposed to be"
+
     _write(_demo_bundle("demo_seen"), isolated / "demo_seen.json")
     assert runner.known_groups() == ("demo_seen",)
     assert runner.GROUPS == ("demo_seen",)
 
+    _write(_demo_bundle("demo_also"), isolated / "demo_also.json")
+    assert runner.known_groups() == ("demo_also", "demo_seen"), "the report is not sorted"
 
-def test_the_six_historical_groups_load_exactly_as_before():
-    """The six shipped bundles verify, load, and resolve their manifest-declared register fns.
+
+def test_a_SHIPPED_payload_verifies_loads_and_resolves_its_register_fns(isolated, monkeypatch):
+    """The `$AGIENCE_BUNDLE_ROOT` route, end to end: verify, load, resolve the manifest's fns.
 
     Fails on any regression in `_load_group`, `_verify_sha` or `_verify_group` — for instance a
-    payload whose `group` field disagrees with its filename.
-
-    Runs against the process's real pins rather than the `isolated` fixture, so what it asserts is
-    what a node actually runs.
+    payload whose `group` field disagrees with its filename, or an origin label that stops
+    distinguishing the shipped route from a host-registered one.
     """
-    for group in ("arithmetic", "operators", "dev_ops", "docs_ops", "corpus", "fetch"):
-        shipped = json.loads((runner._DATA_DIR / (group + ".json")).read_text(encoding="utf-8"))
-        entry = runner.load(group)
-        assert entry.__name__.endswith("." + shipped["entry_module"])
-        assert runner.loaded()[group]["sha256"] == shipped["sha256"]
-        assert runner.loaded()[group]["origin"] == "shipped"
-        assert all(callable(f) for f in runner.register_fns(group))
+    monkeypatch.setattr(runner, "_DATA_DIR", isolated)
+    path = _write(_demo_bundle("demo_shipped"), isolated / "demo_shipped.json")
+    shipped = json.loads(path.read_text(encoding="utf-8"))
+
+    entry = runner.load("demo_shipped")
+    assert entry.__name__.endswith(".demo_shipped")
+    assert entry.MARKER == "demo_shipped" and entry.add(2, 3) == 5
+    assert runner.loaded()["demo_shipped"]["sha256"] == shipped["sha256"]
+    assert runner.loaded()["demo_shipped"]["origin"] == "shipped", (
+        "a payload found in the bundle directory reported as something other than 'shipped'")
+    assert all(callable(f) for f in runner.register_fns("demo_shipped"))
+    assert _log(isolated).read_text(encoding="utf-8") == "EXECUTED"
 
 
 # ── a new group, end to end ──────────────────────────────────────────────────────────────────────
@@ -148,19 +153,26 @@ def test_a_NEW_group_loads_end_to_end(isolated):
         "the exec log did not fire — the tamper test below would then prove nothing")
 
 
-def test_a_host_registered_payload_OUTRANKS_the_shipped_one(isolated):
-    """`register_group` is the host's answer, and it beats the ambient sibling checkout — the same
+def test_a_host_registered_payload_OUTRANKS_the_shipped_one(isolated, monkeypatch, tmp_path):
+    """`register_group` is the host's answer, and it beats the bundle directory — the same
     precedence `register_seam` has over anything on `sys.path`.
 
-    Fails if the shipped directory is consulted first: `fetch` would then resolve to chorus's real
-    organon and both assertions below would miss.
+    Two payloads carry the same group name and different entry modules, so which one ran is
+    readable from the loaded module rather than inferred. Fails if the shipped directory is
+    consulted first: the module below is then the shipped one and `origin` reads "shipped".
     """
-    path = _write(_demo_bundle("fetch"), isolated / "fetch.json")
-    runner.register_group("fetch", path)
-    runner._loaded.pop("fetch", None)
-    mod = runner.load("fetch")
-    assert mod.MARKER == "fetch" and mod.add(1, 1) == 2
-    assert runner.loaded()["fetch"]["origin"] == "host"
+    monkeypatch.setattr(runner, "_DATA_DIR", isolated)
+    _write(_demo_bundle("demo_both", entry="shipped_entry"), isolated / "demo_both.json")
+
+    host_dir = tmp_path / "host"
+    host_dir.mkdir()
+    path = _write(_demo_bundle("demo_both", entry="host_entry"), host_dir / "demo_both.json")
+    runner.register_group("demo_both", path)
+
+    mod = runner.load("demo_both")
+    assert mod.__name__.endswith(".host_entry"), "the shipped payload outranked the host's"
+    assert mod.add(1, 1) == 2
+    assert runner.loaded()["demo_both"]["origin"] == "host"
 
 
 # ── The four payloads that do not run ────────────────────────────────────────────────────────────
@@ -190,10 +202,9 @@ def test_a_TAMPERED_bundle_in_a_NEW_group_is_REFUSED_before_exec(isolated):
     assert "demo_tampered" not in runner.loaded(), "a refused bundle was pinned anyway"
 
 
-# A group name that stands for "nothing carries this". `op_pay_session` is an organon that
-# `ophan/server.py` names and does not implement — two Stripe tools point at it — so the name is
-# meaningful rather than arbitrary. The day it is built, this test fails, which is the right signal:
-# the name needs replacing, and the test below needs leaving alone.
+# A group name that stands for "nothing carries this". The day something is published under it,
+# `test_the_unknown_group_example_is_STILL_unknown` fails, which is the right signal: the name needs
+# replacing, and the refusal test below needs leaving alone.
 _NEVER_BUILT = "op_pay_session"
 
 
@@ -221,7 +232,7 @@ def test_an_UNKNOWN_group_is_REFUSED_loudly(isolated):
     with pytest.raises(runner.UnknownBundleGroupError) as e:
         runner.load(_NEVER_BUILT)
     msg = str(e.value)
-    assert _NEVER_BUILT in msg and "bundle_spec.json" in msg and "register_group" in msg, msg
+    assert _NEVER_BUILT in msg and "AGIENCE_BUNDLE_ROOT" in msg and "register_group" in msg, msg
     assert isinstance(e.value, runner.BundleIntegrityError), (
         "an absent payload must stay inside the refuse-to-run family — every caller that already "
         "refuses on a bad bundle must refuse on a missing one")

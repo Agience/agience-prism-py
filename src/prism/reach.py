@@ -34,7 +34,6 @@ row of `agience-pharos/genesis/TEST-ARCHITECTURE.md`.
 from __future__ import annotations
 
 import hashlib
-import json
 from typing import Any, Callable, Dict, List, Optional
 
 from .plane import HLC, Keyring, Lightcone, open_sealed, seal

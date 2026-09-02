@@ -3,106 +3,132 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agience-prism-py"
-version = "0.1.0"
-description = "Agience Prism — an environment adapter: the Python developer SDK (Apache-2.0). The base install is the CONTRACT and has no dependencies; Host, MCP-server and trust-floor surfaces are extras. Build on Agience over the wire — no platform IP, no copyleft reaching your code."
+name = "agience-prism"
+dynamic = ["version"]
+description = "The Agience developer SDK for Python — an environment adapter. Build on Agience over the wire."
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = "Apache-2.0"
-authors = [{ name = "Ikailo Inc." }]
-# ⛔ THE BASE INSTALL IS THE CONTRACT, AND IT HAS NO DEPENDENCIES. THAT IS THE POINT (2026-07-30).
-#
-# It used to list all six of fastapi, uvicorn, httpx, mcp, pyjwt and python-jose, because
-# `prism/__init__.py` imported host/server/trust eagerly. So reading one constant cost a web
-# framework — and that weight had a measured consequence: `agience-beam` would not depend on this
-# package at all and VENDORED a byte-identical `canonical.py`, with `agience-observe` doing the same
-# for its bare installer. Three copies of the code that decides every content address and every
-# signature, kept in step by a gate, because the SDK could not be imported cheaply.
+authors = [{ name = "Ikailo Inc.", email = "connect@agience.ai" }]
+keywords = ["agience", "prism", "sdk", "mcp", "agent", "capability", "canonical-json", "jcs"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+# The base install is the contract, and it has no dependencies.
 #
 # The contract — canonical JSON, crystal_model, capabilities, config, errors, structural,
-# environment — is 1,012 lines of pure stdlib. Shipping it dependency-free lets beam import it,
-# which is what collapses the vendoring. Enforced by `tests/test_contract_install_is_pure.py`.
+# environment, resolution, adaptive_cut — is pure stdlib. Shipping it dependency-free is what lets a
+# component that must stay self-contained import it rather than vendor a copy: three byte-identical
+# copies of `canonical.py` once existed in this workspace, kept in step by a gate, because reading
+# one constant from this package cost a web framework.
 #
-# ⭐ WIDENED 2026-08-04 BY `resolution` AND `adaptive_cut` (plan item D10) — DELIBERATELY, AND STILL
-# `[]`. They came from `agience-beam`, whose sixteen wire shims all said *"what stays in beam is the
-# APERTURE — `optics` `resolution` `adaptive_cut` — the three modules that need the aperture and
-# numpy."* MEASURED with numpy, the aperture and scipy blocked at the meta-path, control first: the
-# first two IMPORT on bare stdlib and only `optics` refuses. They were in beam by association.
+# `resolution` and `adaptive_cut` are the two derivations in the base — everything else here
+# declares, these two compute. Measured with numpy and scipy blocked at the meta-path: both import
+# on bare stdlib. They sit in the base rather than behind an extra so that every component holds the
+# same answer, including one whose sha-verified source bundle cannot require numpy.
 #
-# ⛔ THEY ARE THE FIRST DERIVATIONS IN THE BASE — everything else here declares, these two compute —
-# and the base is where they have to be. `resolution.py`'s own closing line is *"pure, stdlib-only,
-# no numpy — so every component can hold the same answer, including the ones that must stay
-# self-contained."* Behind an extra a component could install prism and NOT get the one resolution,
-# which is precisely how `chorus/sage/corpus.py` came to carry a verbatim standalone copy of
-# `exact_limit` and `signal_end`: a sha-verified source bundle could not require numpy, so it kept
-# its own. Putting the definition in the dependency-free base is what let that copy be deleted.
-# `test_the_derivations_import_with_numpy_blocked_too` blocks numpy as well and EXERCISES both
-# surfaces, so "stdlib-only" is a measurement that can fail rather than a sentence in a header.
+# Enforced by `tests/test_contract_install_is_pure.py`, and by
+# `test_the_derivations_import_with_numpy_blocked_too`, which blocks numpy and exercises both
+# surfaces — so "stdlib-only" is a measurement that can fail rather than a sentence in a header.
 dependencies = []
 
+[project.urls]
+Homepage = "https://agience.ai"
+Source = "https://github.com/Agience/agience-prism-py"
+Issues = "https://github.com/Agience/agience-prism-py/issues"
+
 [project.scripts]
-# The `prism` CLI (prism/cli.py): init / list / install / publish. `install` and
-# `publish` verify through `prism.crystal_model` — the crystal contract's common
-# ground, in this package's dependency-free base. It USED TO be `beam.crystal_model`,
-# imported lazily from the environment; `agience-beam` was archived 2026-08-05 and the
-# contract has lived here since, so the CLI has no cross-repo import left to arrange.
+# The `prism` CLI (prism/cli.py): init / list / install / publish. `install` and `publish` verify
+# through `prism.crystal_model` — the crystal contract's common ground, in this package's
+# dependency-free base, so the CLI has no cross-repo import to arrange.
 prism = "prism.cli:main"
 
 [project.optional-dependencies]
-# The RUNTIME surfaces. Each names only what its own modules import — asking for one must not drag
-# in the others, or the split is cosmetic.
+# The runtime surfaces. Each names only what its own modules import: asking for one must not drag in
+# the others, or the split is cosmetic.
 trust = ["python-jose[cryptography]>=3.3", "cryptography>=42"]   # prism.trust — sign/verify, keys
 host = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "httpx>=0.27", "pyjwt[crypto]>=2.8"]
 server = ["mcp[cli]>=1.6.0", "httpx>=0.27"]                      # prism.server — MCP scaffold
 cli = ["cryptography>=42", "httpx>=0.27"]                        # the `prism` command
 vector = ["numpy>=1.24"]                                         # prism.vector — unit/cosine primitives
 
-# ⛔ THE WIRE (plan item D5, 2026-08-04) — AND THE REASON IT IS AN EXTRA AND NOT A DEPENDENCY.
+# The wire — sixteen modules: reach · plane · streams · carriers · frames · propagation ·
+# mcp_bridge · schema · demurrage · minting · settlement · pump · minhash · error_threshold ·
+# extraction · conservation. It is an extra rather than a dependency because it is not all stdlib,
+# and the floors are narrower than "the wire needs numpy and cryptography":
 #
-# Sixteen modules moved here from `agience-beam`: reach · plane · streams · carriers · frames ·
-# propagation · mcp_bridge · schema · demurrage · minting · settlement · pump · minhash ·
-# error_threshold · extraction · conservation. beam keeps the APERTURE — `optics`, and after plan
-# item D10 that is the whole of it — which needs the aperture library, and therefore could
-# never come here. (`resolution` and `adaptive_cut` were named as aperture too, and were not: they
-# import on bare stdlib and went to the BASE above, not to this extra.)
-#
-# The wire is NOT all stdlib, so it cannot go in the base. MEASURED per module, and the floors are
-# narrower than "the wire needs numpy and cryptography":
-#
-#   numpy         frames · conservation            directly (a frame IS a float array)
+#   numpy         frames · conservation            directly (a frame is a float array)
 #                 propagation · demurrage          transitively, through `prism.law`
 #   cryptography  plane                            directly (AES-256-GCM sealing on the mesh plane)
 #                 streams · reach                  transitively, through `prism.plane`
-#   NEITHER       carriers · pump · minhash · minting · settlement · extraction · schema ·
-#                 error_threshold · mcp_bridge     — 9 of the 16 import on the BARE base install
+#   neither       carriers · pump · minhash · minting · settlement · extraction · schema ·
+#                 error_threshold · mcp_bridge     — 9 of the 16 import on the bare base install
 #
-# ⭐ Those 9 are asserted, not asserted-about: `tests/test_wire_extra.py` imports each of them in a
-# subprocess with numpy AND cryptography blocked, with a control proving the blocker bites. So the
-# claim that most of the wire is free is a measurement that can fail, and an accidental
-# `import numpy` at the top of `carriers.py` is caught the day it lands rather than the day an edge
-# node cannot install.
+# Those 9 are asserted, not asserted about: `tests/test_wire_extra.py` imports each of them in a
+# subprocess with numpy and cryptography blocked, with a control proving the blocker bites. An
+# accidental `import numpy` at the top of `carriers.py` is caught the day it lands rather than the
+# day an edge node cannot install.
 #
-# ONE extra rather than two (`wire-frames` / `wire-transport`) because no consumer has yet been
-# measured wanting one half without the other, and a split nobody needs is a split that goes stale.
-# The floors above are recorded so that split is a measurement away rather than an archaeology.
+# One extra rather than two (`wire-frames` / `wire-transport`): no consumer has been measured
+# wanting one half without the other. The floors above are recorded so that split is a measurement
+# away rather than an archaeology.
 wire = ["numpy>=1.24", "cryptography>=42"]
 
-all = ["agience-prism-py[trust,host,server,cli,vector,wire]"]
-dev = ["agience-prism-py[all]", "pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.4"]
+all = ["agience-prism[trust,host,server,cli,vector,wire]"]
+dev = ["agience-prism[all]", "pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# ⛔ THE SHARED CONFORMANCE VECTORS SHIP INSIDE THE WHEEL. THAT IS THE WHOLE POINT (2026-08-04, A1).
+[tool.setuptools.dynamic]
+# One version, read from the package. `prism.__version__` is what a consumer reads at runtime, so
+# it is the version of record; a second literal here would be the one the release tag check agrees
+# with while the installed package reports something else. `prism/host` and `prism/server` re-export
+# the same name rather than declaring their own.
+version = { attr = "prism.__version__" }
+
+# The shared conformance vectors ship inside the wheel.
 #
-# `prism/vectors/*.json` pins the bytes that prism-py, prism-js, prism-c, beam's aperture and
-# mantle's beacon are each checked against. They lived in the beam repo — which is scheduled to
-# dissolve — and every consumer reached them by walking up parent directories to a sibling checkout.
-# Those walks were pinned one path segment off, and mantle's gate sat 100% SKIPPED on it, reading as
-# an environment difference while actually verifying nothing.
+# `prism/vectors/*.json` pins the bytes that prism-py, prism-js, prism-c and mantle's beacon are
+# each checked against. Declared as package data so `pip install agience-prism` is sufficient to run
+# a conformance gate: no source tree, no sibling repo, no walk up parent directories.
+# `tests/test_vectors_package.py` asserts the set is present through `importlib.resources`, which is
+# the path a wheel install resolves. They are data — pure stdlib to read — so the dependency-free
+# base install is untouched.
 #
-# Declared as package-data so `pip install agience-prism-py` is sufficient to run a conformance
-# gate: no source tree, no sibling repo, no walk. `tests/test_vectors_package.py` asserts the set
-# is present through `importlib.resources`, which is the same path a wheel install resolves.
-# They are DATA — pure stdlib to read — so the dependency-free base install above is untouched.
+# `py.typed` (PEP 561) is what makes the annotations throughout this package visible to a consumer's
+# type checker; without the marker they are ignored in an installed wheel.
 [tool.setuptools.package-data]
 "prism.vectors" = ["*.json"]
+"prism" = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Async tests declare their own loop scope; pinning the default here is what silences the
+# pytest-asyncio deprecation warning that otherwise heads every run.
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Ruff's default rule set (E4 imports, E7 statements, E9 syntax, F pyflakes). E501 is left out
+# because the house style is a soft 100 columns that docstrings and measurement tables exceed on
+# purpose; a limit the tree does not hold is a gate that is always red.
+
+[tool.ruff.lint.per-file-ignores]
+"src/prism/__init__.py" = ["E402"]        # the BLAS thread pin must precede every other import
+"src/prism/embodiment.py" = ["F401"]
+"src/prism/grounding.py" = ["F401"]
+"**/__init__.py" = ["F401"]

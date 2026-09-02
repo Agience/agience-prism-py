@@ -7,7 +7,6 @@ The invariant under every test: settlement moves energy, never creates or destro
 from __future__ import annotations
 
 from prism import settlement as s
-from prism import mass
 from prism.attestation import Attestation, Ledger
 
 
