@@ -30,7 +30,8 @@ def test_matches_an_independent_reference_over_seeds():
         tgts = [(f"t{j}", 1.0 + ((r >> (j * 5)) % 10) / 10.0) for j in range(4)]
         dmap = {(sk, tk): ((r >> (i + j)) % 30) / 10.0 for i, (sk, _) in enumerate(srcs)
                 for j, (tk, _) in enumerate(tgts)}
-        dist = lambda sk, tk: dmap[(sk, tk)]
+        def dist(sk, tk):
+            return dmap[(sk, tk)]
         got = prop.screened_accumulate(srcs, tgts, distance=dist, xi=0.42, gap=0.05)
         exp = _naive(srcs, tgts, dist, 0.42, 0.05)
         assert math.isclose(got[0], exp[0], rel_tol=1e-12, abs_tol=1e-12), (seed, got, exp)

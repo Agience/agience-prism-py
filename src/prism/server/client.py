@@ -2,9 +2,9 @@
 
 Thin wrapper over ``httpx`` that prefixes the right plane's base URI and attaches
 the Server's delegation/API-key headers. Each call is routed by path: artifact
-OPERATIONS (``/artifacts/{id}/op/*``, ``/create``, ``/resolve/*``, ``/embed``)
-dispatch through Crystal, the content-type gateway (``server.crystal_uri``); raw
-CRUD, search and events stay on Mantle (``server.api_uri``). Crystal forwards the
+OPERATIONS (``/artifacts/{id}/op/*``, ``/create``, ``/resolve/*``) dispatch
+through Crystal, the content-type gateway (``server.crystal_uri``); raw CRUD,
+search and events stay on Mantle (``server.api_uri``). Crystal forwards the
 caller's token and Mantle/personas still enforce keyed access. Functions raise
 ``httpx`` errors; callers (server tools) shape them into results.
 """
@@ -29,10 +29,9 @@ class AgienceClient:
 
     def _base_for(self, path: str) -> str:
         """Crystal for artifact op dispatch, else Mantle for raw CRUD / search."""
-        is_op = bool(_OP_PATH.search(path)) or path.split("?", 1)[0] in (
-            "/create",
-            "/embed",
-        ) or path.startswith("/resolve/")
+        is_op = (bool(_OP_PATH.search(path))
+                 or path.split("?", 1)[0] == "/create"
+                 or path.startswith("/resolve/"))
         return self._b.crystal_uri if is_op else self._b.api_uri
 
     # ------------------------------------------------------------------
@@ -74,19 +73,13 @@ class AgienceClient:
     ) -> dict:
         """Call the raw query primitive — returns the caller's authorized candidates.
 
-        This posted to `/search/query`, which Mantle does not serve. Its top-level segments
-        are artifacts, auth, docs, events, git, grants, mcp, status, system, v2 and version —
-        there is no `search` plane and there has not been one. The primitive is `POST /artifacts/recall`
-        with `candidates: true`, which is exactly what this method describes: the narrowed,
-        unranked, unhydrated set.
+        The primitive is `POST /artifacts/recall` with `candidates: true`: the narrowed set,
+        unranked and unhydrated. Mantle has no `search` plane; its top-level segments are
+        artifacts, auth, docs, events, git, grants, mcp, status, system, v2 and version.
 
-        `tests/server/test_client_routing.py` passed throughout, because it pins WHICH BASE the
-        path is sent to and not whether the path exists. The routing was right and the target was
-        not.
-
-        `embedding` is sent as `vector`, recall's query-side ingress and the same `array[number]`.
-        `embedding` was retired on the API and is IGNORED there, so the old name would
-        have been dropped in silence even once the path was right.
+        `embedding` is sent as `vector`, which is recall's query-side ingress and the same
+        `array[number]`. The server ignores a field named `embedding`, so the argument name here
+        and the wire name deliberately differ.
         """
         body: dict = {"candidates": True, "candidate_budget": candidate_budget}
         if query_text:
@@ -124,10 +117,6 @@ class AgienceClient:
     async def resolve(self, content_type: str) -> Any:
         """Resolve a content type to its declared operations (via Crystal)."""
         return await self.get(f"/resolve/{content_type}")
-
-    async def embed(self, body: dict) -> Any:
-        """Embed text/content through Crystal's embedding gateway."""
-        return await self.post("/embed", json=body)
 
     async def get_artifact(self, artifact_id: str) -> dict:
         """Read a raw artifact — CRUD, served by Mantle."""

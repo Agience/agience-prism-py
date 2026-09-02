@@ -1,16 +1,15 @@
 name: Release
 
-# Cut a release by pushing a version tag (the tag, minus "v", must match
-# `version` in pyproject.toml):
+# Cut a release by pushing a version tag. The tag, minus "v", must match `prism.__version__`,
+# which is where `pyproject.toml` reads the package version from:
 #     git tag v0.1.0 && git push origin v0.1.0
-# One job builds, creates the GitHub Release, and publishes to PyPI via
-# Trusted Publishing (OIDC) — no token stored. Tests are NOT re-run here:
-# ci.yml gates every commit on main, and the tag points at a tested one.
+# One job builds, creates the GitHub Release, and publishes to PyPI via Trusted Publishing (OIDC) —
+# no token stored. Tests are not re-run here: ci.yml gates every commit on main, and the tag points
+# at a tested one.
 #
-# Only the BASE install (stdlib, zero dependencies — the contract) is published here. The
-# `trust`, `host`, `server`, `cli`, `vector` and `wire` runtime extras publish along with it in
-# the same wheel/sdist; they just stay dormant until a consumer opts in with `pip install
-# 'agience-prism-py[...]'`.
+# The distribution is `agience-prism`. Its base install is the contract — stdlib, no dependencies.
+# The `trust`, `host`, `server`, `cli`, `vector` and `wire` extras publish in the same wheel and
+# sdist and stay dormant until a consumer opts in with `pip install 'agience-prism[...]'`.
 on:
   push:
     tags: ["v*"]
@@ -30,18 +29,27 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Tag matches pyproject version
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          ver="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
-          echo "tag=$tag  pyproject=$ver"
-          test "$tag" = "$ver" || { echo "::error::tag v$tag != pyproject version $ver"; exit 1; }
       - name: Build sdist + wheel
         run: |
           python -m pip install --upgrade build twine
           python -m build
           python -m twine check dist/*
+      # Checked against the built artifact rather than against a file. The version is dynamic —
+      # setuptools reads it from `prism.__version__` — so reading a literal out of pyproject.toml
+      # would check a key that is no longer there, and reading the source would check the input to
+      # the build instead of its output. The wheel that is about to be uploaded is what must carry
+      # the tag's version.
+      - name: Tag matches the built version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ls -1 dist/
+          test -f "dist/agience_prism-${tag}-py3-none-any.whl" || {
+            echo "::error::no dist/agience_prism-${tag}-py3-none-any.whl — tag v${tag} does not match prism.__version__"
+            exit 1; }
+          test -f "dist/agience_prism-${tag}.tar.gz" || {
+            echo "::error::no dist/agience_prism-${tag}.tar.gz — tag v${tag} does not match prism.__version__"
+            exit 1; }
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

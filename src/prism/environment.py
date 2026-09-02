@@ -21,7 +21,6 @@ appears is picked up. See `agience-pharos/genesis/PRISM-AND-CAPABILITIES.md`.
 from __future__ import annotations
 
 import hashlib
-import json
 from typing import Any, Callable, Dict, Iterable, Optional, Set
 
 from .errors import CapabilityNotFound

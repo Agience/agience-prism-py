@@ -41,7 +41,6 @@ from typing import Optional
 
 from dataclasses import dataclass
 
-from . import attestation as _attest
 from . import mass as _mass   # a sibling module: the revision type this settlement reports
 
 

@@ -18,7 +18,6 @@ What these tests watch for:
   - the store read grows with the plane, so the cost does too;
   - a malformed row stalls the plane forever, or spins the pager in an infinite loop.
 """
-import pytest
 
 from prism.carriers import CARRIER_LEAF_CT, StoreCarrier
 
@@ -65,18 +64,18 @@ def test_poll_returns_the_WHOLE_plane_every_time():
     c = StoreCarrier(_Arts())
     for i in "abc":
         c.put(_leaf(i))
-    assert {l["id"] for l in c.poll()} == set("abc")
-    assert {l["id"] for l in c.poll()} == set("abc"), "a second poll lost leaves it had returned"
-    assert {l["id"] for l in c.poll()} == set("abc")
+    assert {leaf["id"] for leaf in c.poll()} == set("abc")
+    assert {leaf["id"] for leaf in c.poll()} == set("abc"), "a second poll lost leaves it had returned"
+    assert {leaf["id"] for leaf in c.poll()} == set("abc")
 
 
 def test_a_leaf_placed_AFTER_a_poll_joins_the_plane():
     c = StoreCarrier(_Arts())
     c.put(_leaf("a"))
-    assert {l["id"] for l in c.poll()} == {"a"}
+    assert {leaf["id"] for leaf in c.poll()} == {"a"}
     c.put(_leaf("b"))
-    assert {l["id"] for l in c.poll()} == {"a", "b"}
-    assert {l["id"] for l in c.poll()} == {"a", "b"}
+    assert {leaf["id"] for leaf in c.poll()} == {"a", "b"}
+    assert {leaf["id"] for leaf in c.poll()} == {"a", "b"}
 
 
 def test_NOTHING_IS_EVER_LOST_across_interleaved_writes_and_polls():
@@ -89,7 +88,7 @@ def test_NOTHING_IS_EVER_LOST_across_interleaved_writes_and_polls():
             i = "leaf-%d-%d" % (round_, k)
             placed.append(i)
             c.put(_leaf(i))
-        got = [l["id"] for l in c.poll()]
+        got = [leaf["id"] for leaf in c.poll()]
         assert sorted(got) == sorted(placed), "the plane lost a leaf at round %d" % round_
         assert len(got) == len(set(got)), "a leaf was returned twice"
 
@@ -101,8 +100,8 @@ def test_a_store_that_cannot_page_keeps_the_OLD_path_whole():
     assert c._bounded is False
     for i in "abc":
         c.put(_leaf(i))
-    assert {l["id"] for l in c.poll()} == set("abc")
-    assert {l["id"] for l in c.poll()} == set("abc")
+    assert {leaf["id"] for leaf in c.poll()} == set("abc")
+    assert {leaf["id"] for leaf in c.poll()} == set("abc")
 
 
 def test_a_row_with_no_leaf_does_not_stall_the_plane_forever():
@@ -114,8 +113,8 @@ def test_a_row_with_no_leaf_does_not_stall_the_plane_forever():
     c = StoreCarrier(arts)
     arts.put_artifact({"id": "junk", "content_type": CARRIER_LEAF_CT})     # no "leaf"
     c.put(_leaf("a"))
-    assert {l["id"] for l in c.poll()} == {"a"}
-    assert {l["id"] for l in c.poll()} == {"a"}         # and the junk never becomes a leaf
+    assert {leaf["id"] for leaf in c.poll()} == {"a"}
+    assert {leaf["id"] for leaf in c.poll()} == {"a"}         # and the junk never becomes a leaf
 
 
 def test_a_store_that_returns_rows_without_seq_terminates():
@@ -127,7 +126,7 @@ def test_a_store_that_returns_rows_without_seq_terminates():
             return [{"doc": {"id": "a", "content_type": content_type, "leaf": _leaf("a")}}]
 
     c = StoreCarrier(_NoSeq())
-    assert [l["id"] for l in c.poll()] == ["a"]         # returns what it collected, and terminates
+    assert [leaf["id"] for leaf in c.poll()] == ["a"]         # returns what it collected, and terminates
 
 
 def test_the_STORE_READ_stops_growing_with_the_plane():

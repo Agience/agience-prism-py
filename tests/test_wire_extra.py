@@ -177,7 +177,7 @@ print('WIRE OK')
 # ── 3 · Nine of the sixteen need no extra at all ─────────────────────────────────────────────────
 
 def test_the_stdlib_only_wire_modules_need_no_extra():
-    """A bare `pip install agience-prism-py` carries two thirds of the wire.
+    """A bare `pip install agience-prism` carries two thirds of the wire.
 
     Checked by blocking numpy and cryptography together and importing the nine for real, with a
     control on each blocked package."""
@@ -202,7 +202,7 @@ c = InMemoryCarrier()
 c.put({{'id': 'b', 'hlc': '2'}})
 c.put({{'id': 'a', 'hlc': '1'}})
 c.put({{'id': 'b', 'hlc': '2'}})                       # content-addressed -> idempotent
-assert [l['id'] for l in c.poll()] == ['b', 'a'], 'the append-only log lost its order'
+assert [leaf['id'] for leaf in c.poll()] == ['b', 'a'], 'the append-only log lost its order'
 assert c.ids() == {{'a', 'b'}}
 assert sorted([{{'id': 'b', 'hlc': '2'}}, {{'id': 'a', 'hlc': '1'}}], key=_leaf_order) \\
     == [{{'id': 'a', 'hlc': '1'}}, {{'id': 'b', 'hlc': '2'}}], 'the cross-language order broke'
@@ -429,7 +429,7 @@ def test_an_instrument_that_fills_only_the_old_member_set_refuses_at_the_routed_
     assert _Routes.seen == [((CAP,), [NEXT])], (
         "the wire did not hand the instrument the frame, the bases and the fired path: %r"
         % (_Routes.seen,))
-    assert [l["to"] for l in carrier.poll() if l["content_type"] == NEED_CT] == [CAP, NEXT], (
+    assert [leaf["to"] for leaf in carrier.poll() if leaf["content_type"] == NEED_CT] == [CAP, NEXT], (
         "the measured hop never reached the plane, so the refusal above proved nothing about "
         "routing")
 

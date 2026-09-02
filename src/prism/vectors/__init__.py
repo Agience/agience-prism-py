@@ -70,8 +70,8 @@ def vector_path(name: str):
     if not handle.is_file():
         raise MissingVectors(
             "shared conformance vectors %r are missing from the installed prism package "
-            "(looked for %s). This gate verifies NOTHING without them. Reinstall "
-            "agience-prism-py — do not disable the gate, and do not reintroduce a relative "
+            "(looked for %s). This gate verifies nothing without them. Reinstall "
+            "agience-prism. Do not disable the gate, and do not reintroduce a relative "
             "path walk to a sibling checkout." % (name, handle))
     return handle
 

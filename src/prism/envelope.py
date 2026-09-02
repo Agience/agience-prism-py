@@ -363,7 +363,8 @@ def cpu_quota() -> float:
                 n = 0
                 for part in cs.split(","):
                     if "-" in part:
-                        a, b = part.split("-"); n += int(b) - int(a) + 1
+                        a, b = part.split("-")
+                        n += int(b) - int(a) + 1
                     else:
                         n += 1
                 if n > 0:

@@ -53,7 +53,6 @@ def test_displaces_REFUSES_rather_than_deciding_head_by_headcount():
     Fails if the `agreeing >=` body returns. Asserted by calling it, because a docstring saying
     "retired" beside a working body would pass any name-based check.
     """
-    import pytest
     from prism.attestation import displaces
     with pytest.raises(NotImplementedError) as e:
         displaces(None, None)

@@ -171,7 +171,7 @@ class S3Carrier:
 
     def poll(self) -> List[Dict[str, Any]]:
         leaves = [self.get(i) for i in self.ids()]
-        return sorted((l for l in leaves if l is not None), key=_leaf_order)
+        return sorted((leaf for leaf in leaves if leaf is not None), key=_leaf_order)
 
 
 # The lattice content_type a carried leaf (a NEED / EVIDENCE envelope) is persisted under. Namespaced so

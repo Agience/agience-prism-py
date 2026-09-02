@@ -1,6 +1,6 @@
 """The MCP server surface — SDK for building MCP servers that integrate with Agience.
 
-Installed with `pip install "agience-prism-py[server]"`.
+Installed with `pip install "agience-prism[server]"`.
 
 Apache-2.0, and permissive on purpose: the AGPL components are the platform (ember,
 origin, chorus), and the integration boundary is permissive so any server — first-party
@@ -29,5 +29,5 @@ Importing this package pulls no heavy deps; ``mcp`` is imported lazily by
 from .auth import Server
 from .server import create_server
 
-__version__ = "0.1.0"
+from .. import __version__          # one version for the package, read from `prism`
 __all__ = ["Server", "create_server", "__version__"]

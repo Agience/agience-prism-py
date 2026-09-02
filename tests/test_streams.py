@@ -146,7 +146,7 @@ def test_frames_are_HLC_ordered_independently_of_arrival_order():
     fabric = LoopbackFabric()
     sender = _stream(fabric)                     # not subscribed: collect the leaves, then replay
     leaves = [sender.send_frame({"n": i}) for i in range(4)]
-    assert [l["hlc"] for l in leaves] == sorted(l["hlc"] for l in leaves), \
+    assert [leaf["hlc"] for leaf in leaves] == sorted(leaf["hlc"] for leaf in leaves), \
         "the sender's own HLC did not increase monotonically"
 
     rx = StreamReceiver("lumen", lc, kr)

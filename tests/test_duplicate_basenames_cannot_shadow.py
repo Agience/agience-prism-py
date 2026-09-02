@@ -30,8 +30,16 @@ from __future__ import annotations
 import collections
 import pathlib
 
+import pytest
+
 TESTS = pathlib.Path(__file__).resolve().parent
 SKIP = {"__pycache__", ".pytest_cache"}
+
+# setuptools' default sdist picks up `tests/test*.py` and nothing below it, so an unpacked sdist has
+# the top-level test modules and none of the subpackages. The structural gate below still holds
+# there — it just has no duplicate to look at.
+SUBPACKAGES_PRESENT = all((TESTS / d / "__init__.py").is_file()
+                          for d in ("host", "server", "trust"))
 
 
 def _test_modules():
@@ -90,6 +98,8 @@ def test_the_KNOWN_duplicate_still_collects_BOTH_files():
     files is removed rather than renamed. The gate above catches the structure; this catches the
     duplicate itself disappearing.
     """
+    if not SUBPACKAGES_PRESENT:
+        pytest.skip("the test subpackages are not present — this tree carries no duplicate to pin")
     dupes = _duplicate_basenames()
     assert "test_auth.py" in dupes, (
         "the known duplicate is gone. If that was deliberate, delete this test — but check first "

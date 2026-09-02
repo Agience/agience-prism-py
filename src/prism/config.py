@@ -10,15 +10,10 @@ and names outside this table (`*_API_URI`, `BACKEND_URI`, …) carry no meaning.
     EMBER_URI    the local leaf -- host self-registration
     KEYS_DIR     host signing / identity keys (signing hosts only)
 
-``EMBER_URI`` joined this table on 2026-08-26, and adding a sixth name to a
-deliberately closed vocabulary needs its reason recorded. Host self-registration
-(``POST /hosts/register``) was addressed to ``MANTLE_URI`` by all three SDKs, and
-mantle serves no such route -- 0 of 66 mounted, measured 2026-08-26 -- while the
-receiver has been on the ember leaf (``ember/surface/serve.py``) since 2026-07-21.
-Every host therefore posted into a 404 on every start and announced nothing. The
-leaf is the right owner: it holds the store the registration writes to and the
-``EMBER_INVOKE_TOKEN`` gate that protects it, so the alternative was a second
-receiver on mantle duplicating both.
+``EMBER_URI`` names the leaf because the leaf owns what host self-registration
+(``POST /hosts/register``) touches: the store the registration writes to, and the
+``EMBER_INVOKE_TOKEN`` gate that protects it. Addressing it anywhere else would
+mean a second receiver duplicating both.
 
 ``AGIENCE_API_URI`` is honored as a deprecated alias for ``MANTLE_URI``; reading
 it emits a :class:`DeprecationWarning` and a one-time log line.

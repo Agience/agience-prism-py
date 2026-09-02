@@ -119,15 +119,10 @@ class Host:
         # Platform connection (optional). When both are present the host
         # self-registers on start; otherwise it just serves (standalone).
         #
-        # THE TARGET IS `EMBER_URI`, NOT `MANTLE_URI`, SINCE 2026-08-26. This read
-        # `MANTLE_URI` and called it "the canonical registration target (§4)", and measured that
-        # day, mantle serves no `/hosts` route at all — 0 of 66 mounted — while every deployment
-        # on disk resolves `MANTLE_URI` to a real mantle node. The receiver has been on the ember
-        # leaf (`ember/surface/serve.py`) since 2026-07-21, so the sender and the receiver were on
-        # different services and every host announced nothing, on every start, into a 404.
+        # The registration target is `EMBER_URI`: the leaf that serves `/hosts/register`.
         #
-        # Still resolved with `default=""` — NOT the localhost default in the config table — so
-        # registration stays strictly opt-in. A host that names no leaf must not start posting at
+        # Resolved with `default=""` rather than with the localhost default in the config table, so
+        # registration is strictly opt-in. A host that names no leaf must not start posting at
         # `localhost:8091` because a default existed.
         self.api_uri = (api_uri or config.resolve("EMBER_URI", default="") or "").rstrip("/")
         self.token = token or os.getenv("AGIENCE_TOKEN")
@@ -235,17 +230,10 @@ class Host:
                     headers={"Authorization": f"Bearer {self.token}"},
                     json={"name": self.name, "operators": self._operators},
                 )
-            # A REFUSAL IS NOT A REGISTRATION. This logged `info` on every reply, so a 404
-            # from a base that serves no such route read exactly like a success. Measured
-            # 2026-08-26, that is the LIVE case and not a hypothetical: every deployment resolves
-            # `MANTLE_URI` to a mantle node, and mantle serves no `/hosts` route at all (0 of 66
-            # mounted). So every prism host has been posting into a 404 on every start since the
-            # SDK shipped, its operators never announced, and the one line that could have said so
-            # reported the 404 at `info` in the same shape as a success.
-            #
-            # This does NOT settle where registration belongs — `ember/surface/serve.py`
-            # serves `/hosts/register` on the local leaf, and which service owns it is an open
-            # routing question. What it settles is that a refusal is audible either way.
+            # A refusal is not a registration, and the log says which one happened. A host
+            # pointed at a base that serves no `/hosts` route gets a 404 and serves on with its
+            # operators unannounced; logged at `info` alongside the successes, that reads as a
+            # start-up that worked.
             if resp.status_code >= 400:
                 log.warning(
                     "self-register REFUSED by %s: HTTP %s. This host is serving, but its operators "

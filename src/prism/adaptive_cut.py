@@ -17,10 +17,9 @@ fixes the cases each gets wrong alone — the noise floor alone keeps all of `[5
 extreme value drags the absolute floor down); a gap rule with a fixed `2.0` guard is crude on gentle
 decays. Composed, the pair needs no constant at all.
 
-Gated by `EMBER_ADAPTIVE_MODE` (`off` | `on` | `shadow`). The default is `on` (see `_DEFAULT_MODE`
-and the measurement above it); this paragraph said `off` until 2026-08-22, which was the default
-when it was written and had not moved with it. `off` makes the serve path use its
-baseline (`content_search._knee`) byte-for-byte until the switch is flipped. `shadow` serves the
+Gated by `EMBER_ADAPTIVE_MODE` (`off` | `on` | `shadow`). The default is `on` — see `_DEFAULT_MODE`
+and the measurement above it. `off` makes the serve path use its baseline
+(`content_search._knee`) byte-for-byte. `shadow` serves the
 baseline unchanged and records the adaptive pick alongside it (label-free A/B on real queries, sink
 `EMBER_ADAPTIVE_SHADOW_LOG`). Falls back to the baseline when the instrument is unavailable or the
 pool is too small to carry structure. Never raises.
@@ -151,9 +150,9 @@ def cut(scores: Sequence[float], *, frame=None) -> Optional[int]:
     through that path, "photosynthesis" reads 1 and "cats and dogs" reads 2. What gates the read is
     `EMBER_ADAPTIVE_MODE`, which defaults to `on` — see `_DEFAULT_MODE`.
 
-    That frame is built from COORDINATES the geometry can place, so a ranking of ordinary documents
+    That frame is built from coordinates the geometry can place, so a ranking of ordinary documents
     — which have no synset names — still yields none, and the cut falls to its baseline there.
-    `mantle.search.beacon.cut.screen_frame` (added 2026-08-22) is the other half: the query-relative
+    `mantle.search.beacon.cut.screen_frame` is the other half: the query-relative
     multi-head screen `W[item, head]`, each candidate's per-head cosine to the query, built from
     embeddings and needing no names at all. It is reachable and deliberately not wired to a live
     caller, because it costs an embeddings lookup per candidate and whether that is worth paying is

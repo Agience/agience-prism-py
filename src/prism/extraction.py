@@ -36,7 +36,6 @@ already price (`verifier`, in the contribution roles). The weakness becomes the 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from .mass import Provenance
 

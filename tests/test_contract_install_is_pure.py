@@ -30,7 +30,7 @@ import pytest
 
 PRISM = pathlib.Path(__file__).resolve().parents[1] / "src" / "prism"
 
-#: The modules a bare `pip install agience-prism-py` must be able to import.
+#: The modules a bare `pip install agience-prism` must be able to import.
 #:
 #: Most of these declare: canonical JSON, the crystal model, the capability grammar, the instrument
 #: protocol. `resolution`, `adaptive_cut` and `rounding` derive — Otsu between-class variance against
@@ -67,14 +67,11 @@ HEAVY = {"fastapi", "uvicorn", "httpx", "mcp", "jose", "jwt", "starlette", "pyda
 SLOT_ONLY_BLOCKED = {"numpy", "beam"}
 
 # ── The dependency boundary ──────────────────────────────────────────────────────────────────────
-# This set held one non-Agience package and was emptied 2026-08-25 [John: that brand must not
-# appear in this repo]. Its stated reason was already false: the package was described as "private"
-# and as one "a consumer cannot install", and it is Apache-2.0 and public.
-#
-# What the removal costs, measured. `SLOT_ONLY_BLOCKED` still carries `numpy` and `beam`, and the
-# subprocess blocker's own control proves it bites by making `prism.vector` fail on numpy — so the
-# blocker is still proven and the contract is still held to stdlib-only, which rejects ANY non-stdlib
-# import whether or not it is named here. What is lost is the specific reminder, not the guarantee.
+# Named packages a contract module may not import at module scope, over and above `HEAVY`. Empty:
+# the guarantee does not rest on this list. The contract is held to stdlib-only, which rejects any
+# non-stdlib import whether or not it is named here, and the subprocess blocker's own control proves
+# it bites by making `prism.vector` fail on numpy. A name here buys a more specific failure message,
+# not a stronger check.
 PRIVATE: set = set()
 
 BLOCKED_IN_CONTRACT = HEAVY | PRIVATE

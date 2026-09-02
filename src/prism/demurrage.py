@@ -44,7 +44,6 @@ import math
 from typing import Optional, Tuple
 
 from . import law as _law
-from . import mass as _mass
 
 # ── the 2nd-law clock is measured, and there is no constant ──────────────────────────────────────
 # In frames: deposited energy cools by exp(-dt/tau). One frame is one change-feed step (mesh `_seq`),

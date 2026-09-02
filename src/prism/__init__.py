@@ -1,36 +1,37 @@
-"""agience-prism-py — an environment adapter: the Agience developer SDK for Python (Apache-2.0).
+"""agience-prism — an environment adapter: the Agience developer SDK for Python (Apache-2.0).
 
-Prism adapts an environment (world <-> frame) to Agience.
-Build on Agience without copyleft reaching your code: the AGPL platform is reached
-over the wire, never linked. No platform IP lives here. Two toolkits in one package —
-a compute SDK that serves operators, and an MCP-server SDK:
+Prism adapts an environment (world <-> frame) to Agience. Build on Agience without copyleft
+reaching your code: the AGPL platform is reached over the wire, never linked, and no platform IP
+lives here. Two toolkits in one package — a compute SDK that serves operators, and an MCP-server
+SDK:
 
     from prism import Host           # build a Host (compute serving operators)
     from prism import create_server  # build an MCP server
     from prism import sign_service_jwt, verify_jwt  # stand on the trust floor
 
-The full surfaces live under ``prism.host``, ``prism.server``, and
-``prism.trust``; the most-used names are re-exported here.
+The full surfaces live under ``prism.host``, ``prism.server`` and ``prism.trust``; the most-used
+names are re-exported here.
 
 The contract — canonical JSON, the crystal model, the capability vocabulary, the config shape, the
-error set, the structural address — is pure stdlib with zero dependencies, and is imported eagerly
-below. The runtime surfaces resolve through PEP 562 `__getattr__`, so `from prism import Host`
-works and fails with a message naming the extra you need, while `from prism.canonical import
-canonical_string` costs nothing.
+error set, the structural address — is pure stdlib with no dependencies, and is imported eagerly
+below. The runtime surfaces resolve through PEP 562 ``__getattr__``, so ``from prism import Host``
+works and fails with a message naming the extra you need, while ``from prism.canonical import
+canonical_string`` costs nothing.
 
     pip install agience-prism            # the contract. no dependencies.
-    pip install agience-prism[trust]     # + jose, cryptography  — sign/verify
-    pip install agience-prism[host]      # + fastapi, uvicorn    — serve operators
-    pip install agience-prism[server]    # + mcp, httpx          — MCP server
-    pip install agience-prism[wire]      # + numpy, cryptography — carry signals
+    pip install agience-prism[trust]     # + jose, cryptography  - sign/verify
+    pip install agience-prism[host]      # + fastapi, uvicorn    - serve operators
+    pip install agience-prism[server]    # + mcp, httpx          - MCP server
+    pip install agience-prism[wire]      # + numpy, cryptography - carry signals
     pip install agience-prism[all]
 
-The wire lives here too: reach · plane · streams · carriers · frames · propagation · mcp_bridge ·
-schema · demurrage · minting · settlement · pump · minhash · error_threshold · extraction ·
-conservation. The members that need numpy or cryptography are covered by `[wire]`; the rest import
-on the bare install. The aperture is reached by injection
-(`prism.instrument`), never by import: the base install is dependency-free, and a published SDK depends only on
-packages its consumers can install.
+The wire lives here too: reach, plane, streams, carriers, frames, propagation, mcp_bridge, schema,
+demurrage, minting, settlement, pump, minhash, error_threshold, extraction, conservation. The
+members that need numpy or cryptography are covered by ``[wire]``; the other nine import on the bare
+install.
+
+The aperture is reached by injection (``prism.instrument``), never by import: a published SDK
+depends only on packages its consumers can install.
 """
 from __future__ import annotations
 
@@ -111,8 +112,8 @@ def __getattr__(name: str) -> Any:
         raise ImportError(
             f"`prism.{name}` needs the '{extra}' extra, which is not installed ({exc}). "
             f"Install it with: pip install agience-prism[{extra}]  — the base install is the "
-            f"CONTRACT only (canonical JSON, the crystal model, the capability vocabulary, config, "
-            f"errors, the structural address) and deliberately has no dependencies."
+            f"contract only (canonical JSON, the crystal model, the capability vocabulary, config, "
+            f"errors, the structural address) and has no dependencies."
         ) from exc
 
     value = mod if name == submodule else getattr(mod, name)

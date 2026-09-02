@@ -1,14 +1,13 @@
-"""A host whose self-registration is REFUSED says so; one that succeeds stays quiet.
+"""A host whose self-registration is refused says so; one that succeeds stays quiet.
 
-THE DEFECT. `Host._register` logged every reply at `info` — `self-register -> <uri> (404)`
-reads exactly like `self-register -> <uri> (200)` in a log anyone is scanning. Measured
-2026-08-26, the 404 is the live case: every deployment resolves `MANTLE_URI` to a mantle node and
-mantle serves **no** `/hosts` route (0 of 66 mounted), so every prism host has posted into a 404 on
-every start since the SDK shipped, with its operators never announced.
+A host that cannot register still serves, so the log line is the only place the difference shows.
+Logged at one level, `self-register -> <uri> (404)` reads exactly like
+`self-register -> <uri> (200)` to anyone scanning, and a host runs indefinitely with its operators
+unannounced and nothing saying so.
 
-This does not settle WHERE registration belongs — `ember/surface/serve.py` serves
-`/hosts/register` on the local leaf, and that split is an open routing question. It settles that
-whichever base is configured, a refusal from it is audible.
+What is pinned here: a refusal is logged at `warning` and names the consequence; a success is
+`info`; a transport failure is `warning` and non-fatal; and the base that is posted to comes from
+`EMBER_URI`, which is the leaf that serves `/hosts/register`.
 """
 from __future__ import annotations
 
@@ -96,12 +95,16 @@ def test_a_transport_failure_is_still_non_fatal(caplog, monkeypatch):
     assert "non-fatal" in " ".join(r.getMessage() for r in caplog.records)
 
 
-# ── where the registration is addressed (changed 2026-08-26) ────────────────────────────────────
+# ── where the registration is addressed ─────────────────────────────────────────────────────────
 
 def test_the_leaf_is_resolved_from_ember_uri_not_mantle_uri(caplog, monkeypatch):
-    """The routing fix. Registration used to resolve `MANTLE_URI`, and mantle serves no `/hosts`
-    route (0 of 66, measured 2026-08-26) — the receiver is on the ember leaf. Pinning the source of
-    the base, not just the path, because the path was never the part that was wrong."""
+    """Registration resolves `EMBER_URI`: the leaf serves `/hosts/register`, and the store the
+    registration writes to and the token gate that protects it are both there.
+
+    Pins the source of the base and not just the path. A host pointed at a base that serves no
+    `/hosts` route posts a well-formed request into a 404 — the path is right and the address is
+    wrong, which is the failure a path-only assertion cannot see. Both variables are set here, so
+    reading the wrong one produces a wrong answer rather than an empty one."""
     seen: list[str] = []
     monkeypatch.setenv("EMBER_URI", "http://leaf.invalid:8091")
     monkeypatch.setenv("MANTLE_URI", "https://mantle.invalid")
