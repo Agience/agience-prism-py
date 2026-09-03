@@ -8,7 +8,7 @@ store-and-forward leaf on a fallback `Carrier` — live is the fast path, the le
 
 `LoopbackFabric` is the test transport; a real WebRTC / QUIC / RF fabric replaces the fabric, never the
 semantics (sealed + HLC-ordered frames + degrade-to-message) pinned here. See
-`agience-pharos/genesis/DATA-COMMS-CHANNELS.md`, `SIGNAL-PROTOCOL.md`.
+the data-comms channel and signal protocol specifications.
 """
 from __future__ import annotations
 

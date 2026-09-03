@@ -35,9 +35,9 @@ from jose import jwt as jose_jwt
 logger = logging.getLogger(__name__)
 
 # Service names recognized by the authority manifest; `init_service_identity` accepts these and
-# nothing else. `crystal` is the content-type gateway (agience-crystal): a platform service so it
+# nothing else. `crystal` is the content-type gateway: a platform service so it
 # can subscribe to Mantle's change-feed as a system consumer and mint delegations for event-driven
-# describers. `lumen` is the conversation persona hosted in agience-chorus.
+# describers. `lumen` is the conversation persona.
 SERVICE_NAMES = ("origin", "mantle", "chorus", "crystal", "lumen")
 
 # Default service-to-service JWT TTL (seconds). Short — these tokens are issued

@@ -54,29 +54,45 @@ imports nothing of the platform.
 
 ```python
 from prism import Host
+from pydantic import BaseModel
 
 host = Host("my-host")
 
+
+class EchoIn(BaseModel):
+    text: str
+
+
 @host.operator("echo", path="/echo")
 def echo(req: EchoIn) -> dict:
+    """The function's type hints drive request and response validation."""
     return {"echo": req.text}
 
-host.serve(port=8083)
+
+app = host.app                  # or: host.serve(port=8083)
 ```
+
+`api_key=...` requires a bearer; `EMBER_URI` + `AGIENCE_TOKEN` make the host self-register on start.
+Routes mounted by hand onto `host.app` are unauthenticated — use `Depends(host.auth_dependency)` to
+apply the same check `@host.operator` does.
 
 A **server** exposes MCP tools authorized as the calling user: it captures the inbound delegation
 token and forwards it on outbound calls, so it only ever acts within that user's authorization.
 
 ```python
+import json
+
 from prism import create_server
 
 mcp, server = create_server("my-server")
+
 
 @mcp.tool(description="Echo a message back, with the calling user's id.")
 async def echo(message: str) -> str:
     return json.dumps({"echo": message, "user": server.get_user_id()})
 
-app = server.create_app(mcp)
+
+app = server.create_app(mcp)    # ASGI; captures the inbound delegation token
 ```
 
 ## The shared contract

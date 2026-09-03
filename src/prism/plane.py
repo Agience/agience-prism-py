@@ -10,7 +10,7 @@ filter — a non-member holds no key to open with.
 
 Transport is a carrier (`carriers.py`) and the plane is carrier-agnostic. Delivery is content-addressed
 (idempotent), HLC-ordered (order-independent), and reconciled by anti-entropy (store-and-forward across
-partitions). See `agience-pharos/genesis/COMMUNICATION-PLANE.md`.
+partitions).
 
 Concrete here: AES-256-GCM sealing with HKDF-derived per-group keys (mirroring mantle's collection-key
 derivation), a hybrid logical clock, durable carriers, and anti-entropy reconcile. Pluggable: the

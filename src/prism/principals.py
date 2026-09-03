@@ -15,7 +15,7 @@ AST scan, so neither imports the other; both depend on prism, and prism's base i
 dependencies at all. This module is that shared leaf and holds nothing else.
 
 It sits here rather than in `prism/grounding.py`, whose `__all__` is fenced by
-`agience-ember/tests/test_grounding_is_not_the_law.py`. Grounding is the runner's small surface —
+the runner's grounding surface. Grounding is the runner's small surface —
 the provenance rungs, the triple type, the transducer op-id, the clock — and what kind of principal
 a subject names is a separate question.
 

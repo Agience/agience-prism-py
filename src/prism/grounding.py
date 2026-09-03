@@ -15,7 +15,7 @@ these values reach both.
 What is genuinely a runner's, and stays here: the conversation-triple content type, the transducer
 op-id prefix, and the UTC clock.
 
-It lives in `prism` because `agience-mantle/src/mantle/shard/content_tier.py` needs `CITE_GENESIS`
+It lives in `prism` because the shard's content tier needs `CITE_GENESIS`
 and `_now()`, and the declared layering has mantle reaching origin and prism. A vocabulary that the
 store, the runner and the personas all stamp into artifacts belongs below all three.
 """
@@ -44,7 +44,7 @@ TRIPLE_TYPE = "application/vnd.agience.triple+json"
 TRANSDUCER_OP = "op.transducer."
 
 # This module is the runner's small surface: the provenance channels, the triple type, the op-id
-# prefix, and the clock. `agience-ember/tests/test_grounding_is_not_the_law.py` fences `__all__` so
+# prefix, and the clock. `__all__` is fenced so
 # it stays that size. Principal classification (`PROCESS_AUTHORS` / `is_process_author`) lives in
 # `prism/principals.py`.
 

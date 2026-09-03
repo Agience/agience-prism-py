@@ -10,7 +10,7 @@ to sign?
 Spelling and reach are separate concerns. The entries below are the lexicon the propagation runs
 over rather than the set of legal capabilities. `sensor.temperature` reaches `sensor.capture` by
 nearness, and `OPEN_FAMILIES` accepts a physical device the moment a host advertises it. Spec:
-`agience-pharos/genesis/CAPABILITY-AS-ARTIFACT.md` — *"a capability is an artifact; matching is
+The capability-as-artifact rule — *"a capability is an artifact; matching is
 propagation — nearest, hop the gap, propagate from there"*
 ([[capability-is-an-artifact-matched-by-propagation]]). Spelling is a typo check; reach is a
 measurement.
@@ -61,7 +61,7 @@ CAPABILITY_KINDS: Dict[str, str] = {
 # `sensor.temperature` or `actuator.relay` without waiting on a vocabulary release, which is what
 # lets a prism be plug-and-play. The two spellings above are exemplars of these families rather than
 # the whole set. Mirrored in prism-c (`is_known_capability`) and prism-js
-# (`OPEN_CAPABILITY_FAMILIES`); `agience-cloud/deploy/capability_drift.py` checks all three agree.
+# (`OPEN_CAPABILITY_FAMILIES`); a cross-SDK drift check holds all three to this list.
 OPEN_FAMILIES = ("sensor.", "actuator.")
 
 

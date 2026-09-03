@@ -20,7 +20,7 @@ external MCP client is injected (a `call_tool` callable of the `chorus_client.ca
 shape adapter between the MCP `tools/call` envelope and a need/evidence signal — nothing here couples a
 capability or dials a wire. The round trip is event-driven: over the loopback fabric a placed need fires the
 provider synchronously (place need → provider fires → places evidence → requester inbox fires); there is
-nothing to poll. See `agience-pharos/genesis/MCP-VS-SIGNAL-AUDIT.md` §3 and `prism/reach.py` (the `Reactor`
+nothing to poll. See `prism/reach.py` (the `Reactor`
 this module's `reactor` parameter expects).
 """
 from __future__ import annotations

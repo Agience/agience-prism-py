@@ -6,7 +6,7 @@ Agience authorizes as the **end user** — the server never holds standing user
 credentials. For server-to-server calls with no user context, an optional API
 key is used instead.
 
-No `agience-beam` dependency (Beacon and third-party closed servers can use this
+No platform dependency (Beacon and third-party closed servers can use this
 freely — see the repo's Apache-2.0 license vs core's AGPL). Tokens are decoded
 UNVERIFIED only to surface a user id for logging; **Agience is the verifier**.
 """
