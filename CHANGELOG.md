@@ -6,7 +6,7 @@ All notable changes to `agience-prism` are recorded here. The format follows
 
 ## [Unreleased]
 
-## [0.1.1]
+## [0.1.2]
 
 First public release.
 
@@ -29,5 +29,5 @@ First public release.
 - `py.typed` (PEP 561): the annotations throughout the package are visible to consumers' type
   checkers.
 
-[Unreleased]: https://github.com/Agience/agience-prism-py/compare/v0.1.1...HEAD
-[0.1.1]: https://github.com/Agience/agience-prism-py/releases/tag/v0.1.1
+[Unreleased]: https://github.com/Agience/agience-prism-py/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/Agience/agience-prism-py/releases/tag/v0.1.2
