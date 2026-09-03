@@ -70,7 +70,7 @@ from .errors import (
     install_error_handlers,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 #: attribute -> (submodule, extra that provides it). Resolved on first access, then cached.
 _LAZY: dict[str, tuple[str, str]] = {

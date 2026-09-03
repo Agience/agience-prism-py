@@ -25,9 +25,9 @@ the slot name is `contract="embodiment"`.
 
 Consumers that import through this module:
 
-    agience-crystal/tests/test_embodiment_injection.py   Embodiment, EMBODIMENT_MEMBERS,
+    the injection tests                                  Embodiment, EMBODIMENT_MEMBERS,
                                                          EmbodimentRequired  (2 import sites)
-    agience-chorus/src/lumen/tests/test_curriculum.py    EmbodimentRequired  (2 import sites)
+    the curriculum tests                                 EmbodimentRequired  (2 import sites)
 """
 from __future__ import annotations
 

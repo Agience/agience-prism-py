@@ -2,7 +2,7 @@
 
 Every layer calls this an envelope: associative reach is bounded by the measured envelope (cgroup
 plus time) rather than by a constant, and the `PROVISIONED_*` numbers in
-`agience-cloud/peers/*/node.env` are a different quantity. One name for one concept is what keeps a
+a node's declared environment are a different quantity. One name for one concept is what keeps a
 config constant from being read as the envelope.
 
 It lives in prism so every layer reaches the same reader. `shard/content_tier.py`, `mesh/daemon.py`,

@@ -47,4 +47,15 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install '.[all]'
       - run: pip check
-      - run: python -c "from prism import Host, create_server, Server, TokenVerifier, AuthError; print('agience-prism SDK OK')"
+      # Called, not just imported. `create_server` reaches its mcp entry point lazily inside the
+      # call, so an import-only check passes against an mcp release whose API this code cannot speak.
+      - run: |
+          python - <<'PY'
+          from prism import Host, create_server, Server, TokenVerifier, AuthError
+          host = Host("ci-probe")
+          assert host.app is not None
+          mcp, server = create_server("ci-probe")
+          app = server.create_app(mcp)
+          assert callable(app)
+          print("agience-prism SDK OK — Host and create_server both built")
+          PY

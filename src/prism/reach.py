@@ -28,8 +28,7 @@ light-cone — reads the answer, and provenance says whose answer it is. The pro
 the sealed body too, so a forged cleartext link is caught on open (AEAD-authenticated).
 
 The handler is injected (a plain `need -> evidence` callable), so this module imports no ember / lumen /
-sage. Degrades to store-and-forward when nothing is live. See `agience-pharos/genesis/SIGNAL-PROTOCOL.md` and the reach
-row of `agience-pharos/genesis/TEST-ARCHITECTURE.md`.
+sage. Degrades to store-and-forward when nothing is live.
 """
 from __future__ import annotations
 

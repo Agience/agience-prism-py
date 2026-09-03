@@ -16,7 +16,7 @@ A **prism** is the environment: a peer-local bag of measured capabilities that a
 here and provides the handle. Everything is an artifact — `artifact()` publishes the advertised set (like
 peers-are-artifacts), content-addressed, seedable/loadable. The advertised set is re-measured on demand
 (self-balancing on the continuum) rather than frozen: a capability that stops working drops off; one that
-appears is picked up. See `agience-pharos/genesis/PRISM-AND-CAPABILITIES.md`.
+appears is picked up.
 """
 from __future__ import annotations
 
