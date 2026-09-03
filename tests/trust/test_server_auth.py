@@ -498,9 +498,9 @@ print('TRUST SURFACE OK')
 """
     import pathlib
 
-    import prism
-
-    cwd = pathlib.Path(prism.__file__).resolve().parents[2]
+    # The repository root, from this file's own position. Deriving it from `prism.__file__` reaches
+    # site-packages once the package is installed rather than on `PYTHONPATH`, which is how CI runs.
+    cwd = pathlib.Path(__file__).resolve().parents[2]
     r = subprocess.run([sys.executable, "-c", program], capture_output=True, text=True, cwd=str(cwd))
     assert "TRUST SURFACE OK" in r.stdout, (r.stderr or r.stdout)[-2500:]
 
@@ -513,9 +513,9 @@ def test_the_trust_extra_still_declares_only_sign_and_verify():
         import tomli as tomllib                                   # type: ignore[no-redef]
     import pathlib
 
-    import prism
-
-    root = pathlib.Path(prism.__file__).resolve().parents[2]
+    # `pyproject.toml` is a repository fact, so the root comes from this file, not from the
+    # installed package's location.
+    root = pathlib.Path(__file__).resolve().parents[2]
     extras = tomllib.loads(
         (root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["optional-dependencies"]
     names = " ".join(extras["trust"]).lower()

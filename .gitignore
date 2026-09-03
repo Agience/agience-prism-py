@@ -61,3 +61,6 @@ node_modules/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Agent instructions stay local. This repo is public; the other repos track their own AGENTS.md.
+AGENTS.md
