@@ -1,9 +1,9 @@
 name: ci
 on: { push: { branches: [main], tags: ['v*'] }, pull_request: {}, workflow_dispatch: {} }
 jobs:
-  # The base install is the CONTRACT and carries no dependencies. Two jobs, because one
-  # `pip install .` followed by `from prism import Host` tests neither half: it fails on the
-  # missing extra and never checks that the contract stands alone.
+  # The base install is the contract and carries no dependencies. The first two jobs are separate
+  # because one `pip install .` followed by `from prism import Host` tests neither half: it fails on
+  # the missing extra and never checks that the contract stands alone. The third runs the suite.
   contract-only:
     runs-on: ubuntu-latest
     steps:
@@ -59,3 +59,32 @@ jobs:
           assert callable(app)
           print("agience-prism SDK OK — Host and create_server both built")
           PY
+
+  # The suite, on every commit. Installing and importing the package says nothing about whether it
+  # behaves: a file deleted from the tree, a README example that no longer runs, and an extra whose
+  # entry point has moved all survive an import check.
+  #
+  # Matrix over the supported range, because `requires-python` claims 3.11 through 3.13 and a claim
+  # nothing exercises is a claim that drifts.
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      # `[dev]` is `[all]` plus pytest, pytest-asyncio and ruff. The suite needs every extra: the
+      # README blocks build a Host and an MCP server, and the wire tests block numpy and
+      # cryptography in a subprocess to prove the base install stands without them.
+      - run: pip install '.[dev]'
+      - run: pip check
+      - name: Lint
+        run: python -m ruff check .
+      - name: Test suite
+        run: python -m pytest -q

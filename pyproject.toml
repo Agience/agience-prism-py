@@ -126,9 +126,13 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-# Ruff's default rule set (E4 imports, E7 statements, E9 syntax, F pyflakes). E501 is left out
-# because the house style is a soft 100 columns that docstrings and measurement tables exceed on
-# purpose; a limit the tree does not hold is a gate that is always red.
+# Pinned explicitly rather than left to ruff's default. The default set grows between releases —
+# 0.16 added pyupgrade, isort and others — so an unpinned gate changes meaning when the tool
+# updates, and a CI job that was green goes red on a commit that touched nothing.
+#
+# E501 is deliberately out: the house style is a soft 100 columns that docstrings and measurement
+# tables exceed on purpose, and a limit the tree does not hold is a gate that is always red.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/prism/__init__.py" = ["E402"]        # the BLAS thread pin must precede every other import

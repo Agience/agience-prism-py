@@ -35,7 +35,7 @@ LINKED_FILES = ("LICENSE", "NOTICE", "CONTRIBUTING.md", "SECURITY.md")
 
 #: Documentation the repository carries. A file dropped from a commit leaves a clean-looking tree,
 #: so its presence is asserted rather than assumed.
-REQUIRED_DOCS = ("README.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md",
+REQUIRED_DOCS = ("README.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md",
                  "LICENSE", "NOTICE")
 
 
