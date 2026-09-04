@@ -1,5 +1,11 @@
 # agience-prism
 
+[![PyPI](https://img.shields.io/pypi/v/agience-prism)](https://pypi.org/project/agience-prism/)
+[![Python](https://img.shields.io/pypi/pyversions/agience-prism)](https://pypi.org/project/agience-prism/)
+[![License](https://img.shields.io/pypi/l/agience-prism)](https://github.com/Agience/agience-prism-py/blob/main/LICENSE)
+[![CI](https://github.com/Agience/agience-prism-py/actions/workflows/ci.yml/badge.svg)](https://github.com/Agience/agience-prism-py/actions/workflows/ci.yml)
+[![Sponsor](https://img.shields.io/badge/Sponsor-Agience-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Agience)
+
 **An environment adapter** — prism adapts an environment (world ↔ frame) to Agience.
 This is the Python adapter: the **Agience developer SDK** (Apache-2.0).
 
