@@ -50,9 +50,9 @@ node_modules/
 *.tsbuildinfo
 
 # --- IDE / OS ---
-# This repo publishes to a public remote, so the generated .vscode/mcp.json -- which names the
-# internal Mantle endpoint -- stays untracked here. agience-build/scripts/mcp_config.py still writes
-# it locally; it is tracked in the private repos.
+# `.vscode/mcp.json` names an internal Mantle endpoint. It is tracked in no repository,
+# public or private. `agience-build/scripts/mcp_config.py` writes it locally for the
+# editor; it does not enter git.
 .vscode/
 .idea/
 *.swp

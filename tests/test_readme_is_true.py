@@ -31,12 +31,15 @@ TEXT = README.read_text(encoding="utf-8")
 BLOCKS = re.findall(r"```python\n(.*?)```", TEXT, re.S)
 
 #: Files the README and CONTRIBUTING link to by name, which must exist in the repository.
-LINKED_FILES = ("LICENSE", "NOTICE", "CONTRIBUTING.md", "SECURITY.md")
+LINKED_FILES = ("LICENSE", "NOTICE", "CONTRIBUTING.md")
 
 #: Documentation the repository carries. A file dropped from a commit leaves a clean-looking tree,
 #: so its presence is asserted rather than assumed.
-REQUIRED_DOCS = ("README.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md",
-                 "LICENSE", "NOTICE")
+#:
+#: No SECURITY.md. None of the six Agience repositories carries one; the reporting address lives in
+#: the README instead, which is the line a reader actually reaches. A required document that only
+#: one repository has is a rule the other five silently break.
+REQUIRED_DOCS = ("README.md", "CONTRIBUTING.md", "CHANGELOG.md", "LICENSE", "NOTICE")
 
 
 def test_there_are_python_blocks_to_check():

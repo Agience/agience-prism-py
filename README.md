@@ -103,10 +103,10 @@ app = server.create_app(mcp)    # ASGI; captures the inbound delegation token
 
 ## The shared contract
 
-`prism/vectors/contract_vectors.json` is the one artifact all three prism SDKs are checked against —
-canonical JSON, the crystal sha, the structural address, capability reach.
-`tests/test_contract_vectors.py` asserts it here; prism-js and prism-c assert the same bytes. That
-file is what makes "one wire format, three languages" a measurement rather than a claim.
+`prism/vectors/contract_vectors.json` is the artifact every prism SDK is checked against — canonical
+JSON, the crystal sha, the structural address, capability reach. `tests/test_contract_vectors.py`
+asserts it here, and each other language leg asserts the same bytes, which is what makes "one wire
+format, several languages" a measurement.
 
 The vectors ship inside the wheel, so `pip install agience-prism` is enough to run a conformance
 gate — no source tree and no sibling checkout:
@@ -132,10 +132,7 @@ python -m pytest -q
 python -m ruff check .
 ```
 
-## License
+Security issues: email **connect@agience.ai** rather than opening a public issue.
 
-Apache-2.0 — see [`LICENSE`](https://github.com/Agience/agience-prism-py/blob/main/LICENSE) and [`NOTICE`](https://github.com/Agience/agience-prism-py/blob/main/NOTICE). Contributing:
-[`CONTRIBUTING.md`](https://github.com/Agience/agience-prism-py/blob/main/CONTRIBUTING.md). Security: [`SECURITY.md`](https://github.com/Agience/agience-prism-py/blob/main/SECURITY.md).
-
-Prism is permissive **deliberately**: build on Agience over the wire with no copyleft reaching your
-code. The base install has no dependencies, so depending on it costs nothing.
+Licensed under Apache-2.0 — see [`LICENSE`](https://github.com/Agience/agience-prism-py/blob/main/LICENSE)
+and [`NOTICE`](https://github.com/Agience/agience-prism-py/blob/main/NOTICE).
