@@ -3,7 +3,8 @@
 Mirrors the platform contract: a service self-signs an RS256 JWT (e.g. Mantle:
 ``iss=mantle, aud=prism``) and the host verifies it against the authority's
 inline JWKS, selecting the key by ``kid``. HS256-local and static API keys are
-fallbacks. An unconfigured verifier is open.
+fallbacks. An unconfigured verifier refuses every call unless built with ``allow_open=True``,
+and a JWT is refused unless ``expected_audiences`` is set or ``any_audience=True``.
 """
 from __future__ import annotations
 
@@ -37,10 +38,10 @@ def manifest_path(rsa_key, tmp_path):
     return str(path)
 
 
-def _rs256(rsa_key, *, aud="prism", iss="mantle", exp_in=300, kid="mantle-1"):
+def _rs256(rsa_key, *, aud="prism", iss="mantle", exp_in=300, kid="mantle-1", **extra):
     now = int(time.time())
     return jwt.encode(
-        {"iss": iss, "sub": "mantle", "aud": aud, "iat": now, "exp": now + exp_in},
+        {"iss": iss, "sub": "mantle", "aud": aud, "iat": now, "exp": now + exp_in, **extra},
         rsa_key,
         algorithm="RS256",
         headers={"kid": kid},
@@ -107,11 +108,45 @@ def test_api_key_allowlist_multi():
     assert not _allows(v, None)
 
 
-def test_open_when_unconfigured():
+def test_closed_when_unconfigured():
     v = TokenVerifier()
+    assert v.enabled is False
+    assert not _allows(v, None)
+    assert not _allows(v, "Bearer anything")
+
+
+def test_open_only_when_asked():
+    v = TokenVerifier(allow_open=True)
     assert v.enabled is False
     assert _allows(v, None)
     assert _allows(v, "Bearer anything")
+    # a configured credential is enforced whatever allow_open says
+    v = TokenVerifier(api_keys=("k",), allow_open=True)
+    assert _allows(v, "Bearer k") and not _allows(v, "Bearer anything")
+
+
+def test_no_expected_audience_refuses_jwts_rather_than_skipping_the_check(rsa_key, manifest_path):
+    v = TokenVerifier(authority_manifest_path=manifest_path)
+    assert not _allows(v, "Bearer " + _rs256(rsa_key))
+    assert "JWTs are refused" in v.describe()
+    v = TokenVerifier(authority_manifest_path=manifest_path, any_audience=True)
+    assert _allows(v, "Bearer " + _rs256(rsa_key, aud="anyone"))
+
+
+def test_no_expected_audience_refuses_hs256_too():
+    secret = "a-local-shared-secret-of-32-bytes!"
+    now = int(time.time())
+    tok = jwt.encode({"aud": "x", "iat": now, "exp": now + 300}, secret, algorithm="HS256")
+    assert not _allows(TokenVerifier(hs256_secret=secret), "Bearer " + tok)
+    assert _allows(TokenVerifier(hs256_secret=secret, any_audience=True), "Bearer " + tok)
+
+
+@pytest.mark.parametrize("token_type", ["refresh", "email_verify", "pwd_reset"])
+def test_a_special_purpose_token_is_refused(rsa_key, manifest_path, token_type):
+    """Origin signs these with the key its access tokens use; only `token_type` marks them."""
+    v = TokenVerifier(authority_manifest_path=manifest_path, expected_audiences=("prism",))
+    assert _allows(v, "Bearer " + _rs256(rsa_key)), "positive control failed FIRST"
+    assert not _allows(v, "Bearer " + _rs256(rsa_key, token_type=token_type))
 
 
 def test_api_keys_dir_hot_reload(tmp_path):
@@ -120,9 +155,9 @@ def test_api_keys_dir_hot_reload(tmp_path):
     # refresh_s=0 → re-scan every check so the test observes changes at once.
     v = TokenVerifier(api_keys_dir=str(d), api_keys_dir_refresh_s=0)
 
-    # Empty dir + no other creds → open (nothing enforced).
+    # Empty dir + no other creds → nothing to check against, so every call is refused.
     assert v.enabled is False
-    assert _allows(v, "Bearer anything")
+    assert not _allows(v, "Bearer anything")
 
     # Drop a key file → enforced; that key accepted, others rejected.
     (d / "prod.key").write_text("prod-key\n", encoding="utf-8")
@@ -146,10 +181,10 @@ def test_api_keys_dir_hot_reload(tmp_path):
     assert not _allows(v, "Bearer k3") and not _allows(v, "Bearer ignored")
 
 
-def test_api_keys_dir_missing_is_open(tmp_path):
+def test_api_keys_dir_missing_is_closed(tmp_path):
     v = TokenVerifier(api_keys_dir=str(tmp_path / "nope"), api_keys_dir_refresh_s=0)
     assert v.enabled is False
-    assert _allows(v, None)
+    assert not _allows(v, None)
 
 
 def test_inline_and_dir_keys_coexist(tmp_path):

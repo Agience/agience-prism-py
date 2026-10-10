@@ -19,8 +19,21 @@ A host authorizes inbound calls with, in precedence order:
 
 Verifying keys come from a mounted authority-manifest file and/or a JWKS URL
 (e.g. Origin's ``/.well-known/jwks.json``). No platform code is imported: the
-manifest is plain public JSON and tokens are verified with PyJWT. A host with no
-source configured is open, so configuring one is what closes it.
+manifest is plain public JSON and tokens are verified with PyJWT.
+
+Fails closed, twice:
+
+  * **No credential configured refuses every call.** Serving without authentication is the
+    explicit keyword ``allow_open=True``, never the absence of configuration.
+  * **A JWT is checked against ``expected_audiences``.** With none configured, JWTs are refused;
+    accepting a JWT for any audience is the explicit keyword ``any_audience=True``. Either way a
+    JWT carrying a ``token_type`` claim is refused: Origin marks its refresh, email-verification
+    and password-reset tokens that way (``prism.access_token.purpose_refusal``), and signs them
+    with the same key as its access tokens.
+
+Both keywords are construction-site arguments with no environment variable behind them, for the
+reason ``prism.trust.ServerAuth(require_auth=...)`` gives: a variable that switches authentication
+off gets exported in a shell and inherited by a process nobody meant it for.
 """
 from __future__ import annotations
 
@@ -32,6 +45,7 @@ import time
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+from ..access_token import purpose_refusal
 from ..errors import AuthError  # re-exported here: callers catch it from this module
 
 log = logging.getLogger("agience.host.auth")
@@ -62,6 +76,8 @@ class TokenVerifier:
         expected_audiences: Iterable[str] = (),
         allowed_issuers: Iterable[str] = (),
         leeway: int = 60,
+        allow_open: bool = False,
+        any_audience: bool = False,
     ) -> None:
         self.api_keys = tuple(k for k in (api_keys or ()) if k)
         # Directory of key files (one key per non-blank, non-`#` line; one file per
@@ -79,6 +95,8 @@ class TokenVerifier:
         self.expected_audiences = tuple(a for a in (expected_audiences or ()) if a)
         self.allowed_issuers = tuple(i for i in (allowed_issuers or ()) if i)
         self.leeway = leeway
+        self.allow_open = bool(allow_open)
+        self.any_audience = bool(any_audience)
         self._manifest_keys: Optional[dict] = None
         self._jwk_client: Any = None
 
@@ -132,28 +150,42 @@ class TokenVerifier:
 
     @property
     def enabled(self) -> bool:
-        """True when at least one credential is configured; a host with none is open.
+        """True when at least one credential is configured.
 
-        Enforcement follows the keys, not the directory: a configured-but-empty
-        key directory leaves the host open until a key file is added, because
-        with no inline keys and no JWT source there is nothing to check against.
+        A host with none refuses every call unless it was built with ``allow_open=True``. The keys
+        decide, not the directory: a configured-but-empty key directory refuses every call until a
+        key file is added.
         """
         return bool(self._all_api_keys()) or self.jwt_enabled
+
+    @property
+    def audience_checked(self) -> bool:
+        """True when a JWT can be accepted: audiences are configured, or ``any_audience`` was set."""
+        return bool(self.expected_audiences) or self.any_audience
 
     def describe(self) -> str:
         """One-line summary of the configured modes (for startup logging)."""
         modes = []
+        if self.jwt_enabled and not self.audience_checked:
+            aud = "; no expected_audiences, so JWTs are refused"
+        elif self.jwt_enabled and not self.expected_audiences:
+            aud = "; any audience (any_audience=True)"
+        else:
+            aud = ""
         if self.authority_manifest_path or self.authority_jwks_url:
-            modes.append("authority-jwt(RS256)")
+            modes.append(f"authority-jwt(RS256{aud})")
         if self.hs256_secret:
-            modes.append("local-jwt(HS256)")
+            modes.append(f"local-jwt(HS256{aud})")
         n_keys = len(self._all_api_keys())
         if n_keys or self.api_keys_dir:
             src = f"api-key x{n_keys}"
             if self.api_keys_dir:
                 src += f" (dir {self.api_keys_dir})"
             modes.append(src)
-        return ", ".join(modes) if modes else "open (no auth configured)"
+        if modes:
+            return ", ".join(modes)
+        return ("open (no auth configured, allow_open=True)" if self.allow_open
+                else "closed (no auth configured; every call is refused)")
 
     # -- key sources --------------------------------------------------------
     def _load_manifest_keys(self, *, force: bool = False) -> dict:
@@ -204,10 +236,12 @@ class TokenVerifier:
         """Authorize a request from its ``Authorization`` header.
 
         Returns ``None`` when authorized; raises :class:`AuthError` otherwise.
-        An unconfigured verifier authorizes everything (open host).
+        An unconfigured verifier refuses everything, unless built with ``allow_open=True``.
         """
         if not self.enabled:
-            return
+            if self.allow_open:
+                return
+            raise AuthError("no credential is configured on this host, so it refuses every call")
         presented = (authorization or "").strip()
         if presented[:7].lower() == "bearer ":
             presented = presented[7:].strip()
@@ -222,12 +256,16 @@ class TokenVerifier:
         raise AuthError("invalid or missing credential")
 
     def _verify_claims_ok(self, claims: dict) -> bool:
+        if purpose_refusal(claims):
+            return False
         if self.allowed_issuers and claims.get("iss") not in self.allowed_issuers:
             return False
         return True
 
     def _verify_rs256(self, token: str) -> bool:
         if not (self.authority_manifest_path or self.authority_jwks_url):
+            return False
+        if not self.audience_checked:
             return False
         try:
             import jwt as _jwt
@@ -249,6 +287,8 @@ class TokenVerifier:
 
     def _verify_hs256(self, token: str) -> bool:
         if not self.hs256_secret:
+            return False
+        if not self.audience_checked:
             return False
         try:
             import jwt as _jwt

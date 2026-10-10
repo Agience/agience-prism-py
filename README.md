@@ -78,7 +78,10 @@ def echo(req: EchoIn) -> dict:
 app = host.app                  # or: host.serve(port=8083)
 ```
 
-`api_key=...` requires a bearer; `EMBER_URI` + `AGIENCE_TOKEN` make the host self-register on start.
+`api_key=...` requires a bearer. A host with no credential configured refuses every operator call;
+`allow_open=True` serves them unauthenticated. A JWT is checked against `expected_audiences` and
+refused when none is set, unless `any_audience=True`. `host.serve` binds `127.0.0.1` unless given
+another address. `EMBER_URI` + `AGIENCE_TOKEN` make the host self-register on start.
 Routes mounted by hand onto `host.app` are unauthenticated — use `Depends(host.auth_dependency)` to
 apply the same check `@host.operator` does.
 

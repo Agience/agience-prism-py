@@ -148,8 +148,9 @@ def verify_jwt(
     """Lower-level verification: signature against `expected_issuer_service`'s inline JWKS,
     optionally enforcing audience and issuer-claim match.
 
-    Use this for user tokens or other JWTs where the `iss` claim doesn't match the service
-    name itself (e.g. user tokens have `iss = AUTHORITY_ISSUER` URL, not "origin"). Pass
+    This checks the signature and nothing about what the token is for. To take an Origin token as
+    a caller's identity, use `verify_access_token`, which refuses refresh, email-verification,
+    password-reset and program tokens that this function accepts. Pass
     `expected_audience=None` to skip audience verification (caller validates aud manually).
 
     `expected_audience` accepts a string (single) or a list of strings (matches any).
@@ -205,6 +206,39 @@ def verify_jwt(
             from jose.exceptions import JWTError
             raise JWTError("token has no audience claim")
 
+    return claims
+
+
+def verify_access_token(
+    token: str,
+    *,
+    delegation_audiences: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Verify an Origin-signed token presented as a caller's identity, and return its claims.
+
+    The one verifier for "who is calling". A signature against the `origin` anchor proves Origin
+    minted the token, not that it is an access token: refresh, email-verification and
+    password-reset tokens verify against the same key. `prism.access_token.caller_refusal` holds
+    the claim rule that tells them apart; this applies it after the signature and expiry, with the
+    manifest's `issuer` as the audience a user token must carry.
+
+    `delegation_audiences` is passed through: the client ids this service answers to as a server,
+    `None` for any, or an empty collection to refuse delegations. See `caller_refusal`.
+
+    Raises:
+        KeyError    — no `origin` trust anchor in the manifest
+        JWTError    — signature/expiry invalid, or the claims are not a caller's access token
+    """
+    from ..access_token import caller_refusal
+
+    claims = verify_jwt(token, expected_issuer_service="origin")
+    refused = caller_refusal(
+        claims,
+        issuer=get_authority_manifest().issuer,
+        delegation_audiences=delegation_audiences,
+    )
+    if refused:
+        raise JWTError(refused)
     return claims
 
 

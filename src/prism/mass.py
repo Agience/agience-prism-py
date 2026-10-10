@@ -326,7 +326,7 @@ class Revision(str, Enum):
     # Artifacts are immutable — a write is always a new version under the same root_id. So the
     # choice here is which version becomes the head.
     REPLACE = "replace"    # the new version becomes HEAD (old archived, kept)
-    PROPOSE = "propose"    # committed as a NON-HEAD competing version, to be promoted
+    PROPOSE = "propose"    # stored as a NON-HEAD competing version, to be promoted
 
 
 def provenance_of(artifact: dict) -> Provenance:

@@ -73,6 +73,7 @@ from jose import jwt as jose_jwt, JWTError
 
 from . import service_identity
 from .authority_trust import (
+    verify_access_token as _verify_access_token,
     verify_delegation_jwt as _verify_delegation_jwt,
     verify_jwt as _verify_jwt,
 )
@@ -283,30 +284,22 @@ class ServerAuth:
         return claims
 
     def verify_user_jwt(self, token: str) -> dict | None:
-        """Verify a user-token JWT issued by Origin (non-delegation).
+        """Verify a user's access token issued by Origin (non-delegation).
 
-        Used by tools that need to confirm a user identity from a forwarded
-        bearer token. Audience is variable (per-OAuth-client), so the caller
-        gets the decoded claims and inspects `aud` itself.
+        Used by tools that need to confirm a user identity from a forwarded bearer token. The
+        claim rule is `prism.access_token.caller_refusal`, applied by `verify_access_token`: a
+        refresh, email-verification or password-reset token is refused, as is a program's token,
+        and a first-party user token must be addressed to the authority issuer. An `mcp_client`
+        token's audience is the requesting client, so the caller gets the claims and inspects
+        `aud` itself. Delegations are refused here: they go through `verify_delegation_jwt` /
+        `verify_origin_delegation`, which also check the actor.
 
         Returns decoded claims on success, ``None`` on any failure.
         """
         if not token:
             return None
         try:
-            claims = _verify_jwt(token, expected_issuer_service="origin")
-            if claims.get("principal_type") == "delegation":
-                # Delegation tokens must use verify_delegation_jwt — they have
-                # a different aud and require the actor check.
-                log.debug(
-                    "User JWT rejected for %s: delegation tokens must use verify_delegation_jwt",
-                    self.client_id,
-                )
-                return None
-            if not claims.get("aud"):
-                log.debug("User JWT rejected for %s: missing aud claim", self.client_id)
-                return None
-            return claims
+            return _verify_access_token(token, delegation_audiences=())
         except (KeyError, JWTError) as exc:
             log.debug("User JWT rejected for %s: %s", self.client_id, exc)
             return None

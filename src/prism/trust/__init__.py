@@ -23,6 +23,7 @@ Each module's docstring states which side of that line it is on.
 from . import authority_trust, key_manager, opsign, scopes, server_auth, service_identity
 from .authority_trust import (
     get_authority_manifest,
+    verify_access_token,
     verify_delegation_jwt,
     verify_jwt,
 )
@@ -39,7 +40,7 @@ from .service_identity import (
 
 __all__ = [
     "authority_trust", "key_manager", "opsign", "scopes", "server_auth", "service_identity",
-    "verify_jwt", "verify_delegation_jwt", "get_authority_manifest",
+    "verify_jwt", "verify_access_token", "verify_delegation_jwt", "get_authority_manifest",
     "init_service_identity", "get_service_identity", "ServiceIdentity",
     "sign_service_jwt", "sign_delegation_jwt", "get_host_id", "SERVICE_NAMES",
     "ServerAuth", "AgienceServerAuth", "MissingDelegationError",

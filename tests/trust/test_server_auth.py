@@ -120,7 +120,8 @@ def _origin_delegation(svc: _Service, *, aud=CLIENT_ID, actor=CLIENT_ID, sub="us
     })
 
 
-def _origin_user_token(svc: _Service, *, aud="agience", sub="user-1", ttl=300, **extra) -> str:
+def _origin_user_token(svc: _Service, *, aud=ISSUER_URL, sub="user-1", ttl=300, **extra) -> str:
+    """An access token as Origin mints one for a first-party client: `aud` is the authority issuer."""
     claims = {"iss": ISSUER_URL, "sub": sub, "aud": aud, "iat": _now(), "exp": _now() + ttl}
     claims.update(extra)
     return svc.sign(claims)
@@ -247,6 +248,54 @@ def test_a_user_token_without_an_audience_is_refused(floor):
     tok = floor["origin"].sign(
         {"iss": ISSUER_URL, "sub": "user-1", "iat": _now(), "exp": _now() + 300})
     assert _auth().verify_user_jwt(tok) is None
+
+
+@pytest.mark.parametrize("token_type", ["refresh", "email_verify", "pwd_reset", "bearer", ""])
+def test_a_special_purpose_origin_token_is_not_a_user_token(floor, token_type):
+    """Origin signs its refresh, email-verification and password-reset tokens with the same key as
+    an access token, and marks them only with a `token_type` claim. Each is otherwise the same
+    shape as the positive control beside it, so the claim is the only difference under test."""
+    auth = _auth()
+    assert auth.verify_user_jwt(_origin_user_token(floor["origin"])) is not None,         "positive control failed FIRST"
+    assert auth.verify_user_jwt(_origin_user_token(floor["origin"], token_type=token_type)) is None
+
+
+@pytest.mark.parametrize("principal_type", ["server", "service", "something-new"])
+def test_a_program_token_is_not_a_user_token(floor, principal_type):
+    assert _auth().verify_user_jwt(
+        _origin_user_token(floor["origin"], principal_type=principal_type)) is None
+
+
+def test_a_user_token_for_another_audience_is_refused(floor):
+    """A first-party user token is addressed to the authority issuer; one addressed elsewhere was
+    not minted as a user's access token here."""
+    assert _auth().verify_user_jwt(_origin_user_token(floor["origin"], aud="agience")) is None
+    assert _auth().verify_user_jwt(
+        _origin_user_token(floor["origin"], aud=ISSUER_URL + "/")) is not None
+
+
+def test_an_mcp_client_token_is_a_user_token_for_its_own_client(floor):
+    tok = _origin_user_token(floor["origin"], aud="some-mcp-client", principal_type="mcp_client")
+    claims = _auth().verify_user_jwt(tok)
+    assert claims is not None and claims["aud"] == "some-mcp-client"
+
+
+def test_a_refresh_token_never_reaches_the_exchange(floor):
+    """The fast-fail verify is what refuses it before Origin is asked. The exchange records its
+    calls rather than raising, because `_mint_delegation_for_user` swallows an exchange failure
+    into the same 401 a refusal produces."""
+    asked: list = []
+
+    async def _exchange(origin_uri, client_id, subject_token, authorization):
+        asked.append(subject_token)
+        return None
+
+    auth = _auth(token_exchange=_exchange)
+    asyncio.run(_drive(auth, _origin_user_token(floor["origin"])))
+    assert len(asked) == 1, "positive control: an access token is forwarded for exchange"
+    _, resp = asyncio.run(_drive(auth, _origin_user_token(floor["origin"], token_type="refresh")))
+    assert resp is not None and resp["status"] == 401
+    assert len(asked) == 1, "a refresh token was forwarded to Origin as a subject token"
 
 
 def test_verify_core_jwt_is_the_same_function(floor):

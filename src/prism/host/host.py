@@ -1,7 +1,7 @@
 """Host — serve operators over HTTP and (optionally) register with Agience.
 
 A Host is COMPUTE that exposes one or more operators (capabilities). It owns a
-FastAPI app with a ``/health`` endpoint, optional shared-bearer auth, a resource
+FastAPI app with a ``/health`` endpoint, inbound auth on every operator route, a resource
 warmup hook, and — when given a connection token — best-effort self-registration
 so the platform can discover it. Operators mount their own typed routes via
 ``@host.operator(...)``; the handler's annotations drive request/response
@@ -15,7 +15,11 @@ validation.
     def embed(req: EmbedRequest) -> EmbedResponse: ...
 
     app = host.app            # uvicorn app:app
-    # or: host.serve(port=8083)
+    # or: host.serve(port=8083)   binds 127.0.0.1; pass host="0.0.0.0" to listen beyond it
+
+A host with no credential configured refuses every operator call. ``allow_open=True`` serves
+them unauthenticated, and is a keyword rather than an environment variable so the choice is
+visible where the host is built.
 """
 from __future__ import annotations
 
@@ -59,6 +63,8 @@ class Host:
         api_uri: Optional[str] = None,
         token: Optional[str] = None,
         warmup: Optional[WarmupFn] = None,
+        allow_open: bool = False,
+        any_audience: bool = False,
     ) -> None:
         self.name = name
         # --- inbound auth ---------------------------------------------------
@@ -71,7 +77,9 @@ class Host:
         #      may be inline (api_key/api_keys) and/or a hot-reloaded directory
         #      of key files on a persistent volume (api_keys_dir / HOST_API_KEYS_DIR)
         #      — drop or remove a file to grant/revoke without a redeploy.
-        # A host with nothing configured is open. Explicit args win over the
+        # A host with nothing configured refuses every operator call unless
+        # `allow_open=True`; a JWT needs `expected_audiences` unless
+        # `any_audience=True` (see auth.py). Explicit args win over the
         # generic HOST_* env fallbacks so an embedding host can map its own env
         # names (e.g. EMBEDDINGS_SERVER_API_KEY) onto these.
         raw = api_key if api_key else os.getenv("HOST_API_KEY", "")
@@ -106,15 +114,25 @@ class Host:
             allowed_issuers=tuple(allowed_issuers)
             if allowed_issuers is not None
             else _split_env("HOST_ALLOWED_ISSUERS"),
+            allow_open=allow_open,
+            any_audience=any_audience,
         )
         if self.verifier.enabled:
             log.info("host %r auth: %s", name, self.verifier.describe())
-        else:
+            if self.verifier.jwt_enabled and not self.verifier.audience_checked:
+                log.warning(
+                    "host %r has a JWT source but no expected audience, so it refuses every JWT: "
+                    "set HOST_EXPECTED_AUDIENCES (or pass expected_audiences=), or pass "
+                    "any_audience=True to accept a JWT addressed to anyone", name)
+        elif allow_open:
             log.warning(
-                "host %r is OPEN — no auth configured (add a key file to the keys "
-                "dir, set an API key, or configure JWT before exposing it publicly)",
-                name,
-            )
+                "host %r is OPEN — no auth configured and allow_open=True: every operator "
+                "call is served unauthenticated", name)
+        else:
+            log.error(
+                "host %r has no auth configured, so it refuses every operator call: add a key "
+                "file to the keys dir, set an API key, or configure JWT (or pass allow_open=True "
+                "to serve unauthenticated)", name)
 
         # Platform connection (optional). When both are present the host
         # self-registers on start; otherwise it just serves (standalone).
@@ -245,7 +263,8 @@ class Host:
             log.warning("self-register failed (non-fatal): %s", exc)
 
     # -- run ----------------------------------------------------------------
-    def serve(self, host: str = "0.0.0.0", port: int = 8083) -> None:
+    def serve(self, host: str = "127.0.0.1", port: int = 8083) -> None:
+        """Run the app under uvicorn. Binds loopback unless ``host`` names another address."""
         import uvicorn
 
         uvicorn.run(self.app, host=host, port=port, timeout_graceful_shutdown=10)

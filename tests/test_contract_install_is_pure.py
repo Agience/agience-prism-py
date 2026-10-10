@@ -47,7 +47,8 @@ PRISM = pathlib.Path(__file__).resolve().parents[1] / "src" / "prism"
 #: `numpy` blocked as well, control first. `numpy` is not in `BLOCKED_IN_CONTRACT` because the rest
 #: of the contract is not at risk of reaching for it.
 CONTRACT = ["canonical", "capabilities", "crystal_model", "config", "errors", "structural",
-            "environment", "instrument", "embodiment", "resolution", "adaptive_cut", "rounding"]
+            "environment", "instrument", "embodiment", "resolution", "adaptive_cut", "rounding",
+            "access_token"]
 
 #: The derivations, named separately because they carry a stricter promise than the rest of the
 #: contract: no numpy either, at import or through any name the module resolves eagerly. The

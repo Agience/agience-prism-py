@@ -32,7 +32,7 @@ class Observation:
     """A single unit a source emits. Enters the store as dark matter (stored, undescribed)
     until a describe-operator illuminates it. Provenance is OBSERVED — Ember saw it.
 
-    `to_doc()` renders it as the store document: id, content_type, state="committed", context,
+    `to_doc()` renders it as the store document: id, content_type, state="live", context,
     content, created_by="ember-source", provenance, plus any `meta` keys that do not collide."""
     id: str
     content: str
@@ -42,7 +42,7 @@ class Observation:
     meta: Dict = field(default_factory=dict)
 
     def to_doc(self) -> dict:
-        d = {"id": self.id, "content_type": self.content_type, "state": "committed",
+        d = {"id": self.id, "content_type": self.content_type, "state": "live",
              "context": self.context, "content": self.content, "created_by": "ember-source",
              "provenance": self.provenance}
         d.update({k: v for k, v in self.meta.items() if k not in d})
