@@ -6,6 +6,11 @@ All notable changes to `agience-prism` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-18
+
+### Added
+- A persona's inbound auth carries a grant key (`agk_…`, bare or artifact-scoped) to the store as-is: its grants are the whole of what it may do, and Mantle decides every call. A persona called with one tried to exchange it at Origin, was refused, and answered 401, so nothing could run on a key a person issued (an agent, a timer). `prism.trust.server_auth.is_grant_key` names the shape.
+
 ## [0.1.4] - 2026-10-09
 
 ### Breaking

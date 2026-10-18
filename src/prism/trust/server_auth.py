@@ -86,6 +86,18 @@ log = logging.getLogger(__name__)
 TokenExchange = Callable[[str, str, str, str], Awaitable[Optional[str]]]
 
 
+
+#: The prefix of a grant key's bearer token (Mantle's `grant_key_service.KEY_PREFIX`). A token may
+#: also name the one artifact it acts on: `<artifact id>:agk_...`.
+GRANT_KEY_PREFIX = "agk_"
+
+
+def is_grant_key(token: str) -> bool:
+    """Is `token` a grant key's bearer token, bare or artifact-scoped?"""
+    token = (token or "").strip()
+    return token.startswith(GRANT_KEY_PREFIX) or (
+        ":" in token and token.split(":", 1)[1].startswith(GRANT_KEY_PREFIX))
+
 class MissingDelegationError(PermissionError):
     """Raised when a tool needs the caller's identity and no delegation is active.
 
@@ -472,6 +484,11 @@ class ServerAuth:
                     stored = raw_token            # Mantle-minted delegation for us
                 elif auth.verify_origin_delegation(raw_token):
                     stored = raw_token            # Origin-minted delegation for us (gateway/event path)
+                elif is_grant_key(raw_token):
+                    # A grant key a person issued (an agent, a timer): its grants are the whole of
+                    # what it may do, and Mantle decides every read and write it makes. It is
+                    # presented to Mantle as-is; there is no person to exchange it for.
+                    stored = raw_token
                 else:
                     stored = await auth._mint_delegation_for_user(raw_token) or ""
 

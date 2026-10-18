@@ -449,6 +449,16 @@ def test_middleware_exchanges_a_raw_user_token(floor):
     assert calls[0][3].startswith("Bearer ")
 
 
+@pytest.mark.parametrize("key", ["agk_abc123", "0b6f1c1e-1111-4111-8111-111111111111:agk_abc123"])
+def test_a_grant_key_is_carried_to_the_store_as_is(floor, key):
+    """A grant key a person issued (an agent, a timer) has no person to exchange it for: its grants
+    are the whole of what it may do, and Mantle decides every call it makes. 2026-10-18: a persona
+    called with one tried to exchange it at Origin, was refused, and answered 401, so a workflow
+    could not run on a key."""
+    auth = _auth(token_exchange=_never_called)
+    assert asyncio.run(_run_middleware(auth, key)) == key
+
+
 def test_a_garbage_token_never_reaches_the_exchange(floor):
     """The local fast-fail verify keeps an unauthenticated caller from making this persona hammer
     Origin. `_never_called` fires if it regresses."""
