@@ -9,6 +9,8 @@ All notable changes to `agience-prism` are recorded here. The format follows
 ## [0.1.5] - 2026-10-18
 
 ### Added
+- `prism.trust.sealing`: a secret sealed to the one key that will use it (RSA-OAEP-256 wrapping an AES-256-GCM key), bound to its context (the recipient's key id, the secret, the card it was released for). It opens only with that key, for that use.
+- A chorus persona may hold its own key pair (`<name>.private.pem`, `service_identity.PERSONA_NAMES`, `load_persona_identity`) and makes its delegation exchange signed with it (`ServerAuth.sign_exchange_jwt`), so Origin can prove which persona the delegation is for. Every persona signed as the shared `chorus` identity and named itself in a claim.
 - A persona keeps the caller's own credential (`ServerAuth.request_caller_token`) beside the delegation it exchanged it for — a person's access token or a grant key, never a delegation addressed to it — so a call it makes to another persona carries what that persona accepts. A persona forwarded its own delegation, which every other persona refuses.
 - A persona's inbound auth carries a grant key (`agk_…`, bare or artifact-scoped) to the store as-is: its grants are the whole of what it may do, and Mantle decides every call. A persona called with one tried to exchange it at Origin, was refused, and answered 401, so nothing could run on a key a person issued (an agent, a timer). `prism.trust.server_auth.is_grant_key` names the shape.
 

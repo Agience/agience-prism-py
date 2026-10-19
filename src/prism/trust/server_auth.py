@@ -356,6 +356,22 @@ class ServerAuth:
             ttl_seconds=ttl_seconds,
         )
 
+    @property
+    def persona(self) -> str:
+        """The persona this server is (`agience-server-lumen` -> `lumen`), or "" for another client."""
+        prefix = "agience-server-"
+        return self.client_id[len(prefix):] if self.client_id.startswith(prefix) else ""
+
+    def sign_exchange_jwt(self) -> str:
+        """The service JWT a delegation exchange is made with: signed by this persona's own key
+        when it holds one, so Origin can prove which persona the delegation is for; the shared
+        chorus identity otherwise."""
+        own = service_identity.load_persona_identity(self.persona) if self.persona else None
+        if own is None:
+            return self.sign_self_jwt(audience="origin")
+        return service_identity.sign_service_jwt(
+            audience="origin", additional_claims={"client_id": self.client_id}, signer=own)
+
     # ------------------------------------------------------------------
     # Forwarded user token -> delegation (the gateway model)
     # ------------------------------------------------------------------
@@ -384,7 +400,7 @@ class ServerAuth:
                 self.origin_uri,
                 self.client_id,
                 user_token,
-                f"Bearer {self.sign_self_jwt(audience='origin')}",
+                f"Bearer {self.sign_exchange_jwt()}",
             )
         except Exception as exc:  # noqa: BLE001 — any transport failure is a failed mint
             log.warning("delegation mint failed for %s: %s", self.client_id, exc)

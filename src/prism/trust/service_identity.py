@@ -40,6 +40,14 @@ logger = logging.getLogger(__name__)
 # describers. `lumen` is the conversation persona.
 SERVICE_NAMES = ("origin", "mantle", "chorus", "crystal", "lumen")
 
+#: The chorus personas. Each may hold its own key pair (`<name>.private.pem`) and sign as itself,
+#: which is how an authority learns WHICH persona is asking rather than that "chorus" is. A persona
+#: whose pair is present signs its delegation exchange with it (`ServerAuth`); Origin then records
+#: the proven signer in the delegation (`act.iss`), and only a proven persona is ever handed a
+#: secret (Mantle's `use`). 2026-10-19: every persona signed as `chorus` and named itself in a
+#: claim, so the actor on a delegation was asserted, not proven.
+PERSONA_NAMES = ("aria", "astra", "sage", "iris", "ophan", "seraph", "lumen")
+
 # Default service-to-service JWT TTL (seconds). Short — these tokens are issued
 # fresh per call. Override per-call if a longer TTL is genuinely needed.
 DEFAULT_TTL_SECONDS = 300
@@ -75,6 +83,8 @@ class ServiceIdentity:
 
 
 _loaded: Optional[ServiceIdentity] = None
+#: Persona identities loaded beside the process's own (several personas share one host process).
+_personas: Dict[str, Optional[ServiceIdentity]] = {}
 
 
 def _keys_dir() -> Path:
@@ -166,10 +176,27 @@ def get_service_identity() -> ServiceIdentity:
     return _loaded
 
 
+def load_persona_identity(name: str) -> Optional[ServiceIdentity]:
+    """A persona's own identity, from `KEYS_DIR/<name>.private.pem`, or None when it holds none."""
+    if name not in PERSONA_NAMES:
+        return None
+    if name not in _personas:
+        path = _keys_dir() / f"{name}.private.pem"
+        key = None
+        if path.is_file():
+            loaded = serialization.load_pem_private_key(path.read_bytes(), password=None)
+            if not isinstance(loaded, RSAPrivateKey):
+                raise TypeError(f"{path} is not an RSA private key")
+            key = loaded
+        _personas[name] = ServiceIdentity(name=name, kid=f"{name}-1", private_key=key) if key else None
+    return _personas[name]
+
+
 def reset_service_identity_for_tests() -> None:
     """Test-only hook to clear the module-level identity between cases."""
     global _loaded
     _loaded = None
+    _personas.clear()
 
 
 def sign_service_jwt(
@@ -178,8 +205,9 @@ def sign_service_jwt(
     additional_claims: Optional[Dict[str, Any]] = None,
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
     issuer_override: Optional[str] = None,
+    signer: Optional[ServiceIdentity] = None,
 ) -> str:
-    """Sign a service-to-service JWT with the running service's private key.
+    """Sign a service-to-service JWT with the running service's private key, or `signer`'s.
 
     Default claims:
         iss = service name
@@ -197,7 +225,7 @@ def sign_service_jwt(
     speaks as itself but binds to a different issuer — the bootstrap-token claim, where
     Origin binds to the deployment's authority issuer. Leave it unset otherwise.
     """
-    identity = get_service_identity()
+    identity = signer or get_service_identity()
     now = int(time.time())
     iss = issuer_override or identity.name
     claims: Dict[str, Any] = {
