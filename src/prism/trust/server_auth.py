@@ -236,6 +236,14 @@ class ServerAuth:
         self.request_user_token: contextvars.ContextVar[str] = contextvars.ContextVar(
             f"agience_request_user_token_{client_id}", default=""
         )
+        #: The caller's own credential, for a call this persona makes to ANOTHER persona through the
+        #: gateway: a person's access token (which that persona exchanges for a delegation of its
+        #: own) or a grant key. Empty when the caller sent a delegation, which is addressed to this
+        #: persona and no other. 2026-10-18: a persona forwarded its own delegation to another
+        #: persona, which refused it, so every cross-persona workflow step answered 401.
+        self.request_caller_token: contextvars.ContextVar[str] = contextvars.ContextVar(
+            f"agience_request_caller_token_{client_id}", default=""
+        )
 
     # ------------------------------------------------------------------
     # Inbound JWT verification (delegation, user)
@@ -480,17 +488,20 @@ class ServerAuth:
                 # user token (the gateway model), exchange it for a delegation rooted
                 # to that user via Origin. Either way the ContextVar ends up holding
                 # a delegation the persona may present back to Mantle.
+                caller = ""
                 if auth.verify_delegation_jwt(raw_token):
                     stored = raw_token            # Mantle-minted delegation for us
                 elif auth.verify_origin_delegation(raw_token):
                     stored = raw_token            # Origin-minted delegation for us (gateway/event path)
                 elif is_grant_key(raw_token):
+                    caller = raw_token
                     # A grant key a person issued (an agent, a timer): its grants are the whole of
                     # what it may do, and Mantle decides every read and write it makes. It is
                     # presented to Mantle as-is; there is no person to exchange it for.
                     stored = raw_token
                 else:
                     stored = await auth._mint_delegation_for_user(raw_token) or ""
+                    caller = raw_token if stored else ""
 
                 # `stored` is empty exactly when no delegation could be established by any of the
                 # three routes above — no token, a malformed one, one issued to a different
@@ -506,9 +517,11 @@ class ServerAuth:
                         return
 
                 tok = auth.request_user_token.set(stored)
+                ctok = auth.request_caller_token.set(caller)
                 try:
                     await self._app(scope, receive, send)
                 finally:
+                    auth.request_caller_token.reset(ctok)
                     auth.request_user_token.reset(tok)
 
         return UserTokenMiddleware

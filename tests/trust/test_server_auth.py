@@ -709,3 +709,38 @@ def test_require_auth_can_be_turned_off_only_explicitly(floor):
 
     _, resp = asyncio.run(_drive(_auth(token_exchange=_never_called, require_auth=False), ""))
     assert resp is None
+
+
+async def _caller_seen(auth, token: str) -> str:
+    seen: dict = {}
+
+    async def _inner(scope, receive, send):
+        seen["caller"] = auth.request_caller_token.get("")
+
+    async def _send(message):
+        pass
+
+    app = auth.make_middleware_class()(_inner)
+    await app({"type": "http", "method": "POST",
+               "headers": [(b"host", b"aria.home.agience.ai"), (b"authorization", f"Bearer {token}".encode())]},
+              None, _send)
+    return seen.get("caller", "")
+
+
+def test_the_callers_own_token_is_kept_for_a_call_to_another_persona(floor):
+    """A person's token is kept beside the delegation it was exchanged for, so a call this persona
+    makes to ANOTHER persona carries what that persona can exchange for itself. 2026-10-18: a
+    persona forwarded its own delegation, the next persona refused it, and every cross-persona
+    workflow step answered 401."""
+    async def _exchange(*a):
+        return "minted-delegation"
+
+    user = _origin_user_token(floor["origin"])
+    assert asyncio.run(_caller_seen(_auth(token_exchange=_exchange), user)) == user
+    assert asyncio.run(_caller_seen(_auth(token_exchange=_never_called), "agk_abc")) == "agk_abc"
+
+
+def test_a_delegation_addressed_to_this_persona_is_never_passed_on(floor):
+    auth = _auth(token_exchange=_never_called)
+    assert asyncio.run(_caller_seen(auth, _origin_delegation(floor["origin"]))) == ""
+    assert asyncio.run(_caller_seen(auth, _mantle_delegation(floor["mantle"]))) == ""
