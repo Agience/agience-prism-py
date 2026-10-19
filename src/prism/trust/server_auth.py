@@ -71,7 +71,7 @@ from typing import Any, Awaitable, Callable, Optional
 
 from jose import jwt as jose_jwt, JWTError
 
-from . import service_identity
+from . import authority_trust, service_identity
 from .authority_trust import (
     verify_access_token as _verify_access_token,
     verify_delegation_jwt as _verify_delegation_jwt,
@@ -244,6 +244,14 @@ class ServerAuth:
         self.request_caller_token: contextvars.ContextVar[str] = contextvars.ContextVar(
             f"agience_request_caller_token_{client_id}", default=""
         )
+        #: The platform service that called, when the caller is one rather than a person: the
+        #: verified issuer of a service JWT addressed to this persona (`aud == client_id`). Such a
+        #: call carries no person, so it reaches only the operations a persona opens to platform
+        #: services (Iris's platform mail); every tool that acts for a person still finds no
+        #: delegation and refuses.
+        self.request_service_caller: contextvars.ContextVar[str] = contextvars.ContextVar(
+            f"agience_request_service_caller_{client_id}", default=""
+        )
 
     # ------------------------------------------------------------------
     # Inbound JWT verification (delegation, user)
@@ -274,6 +282,25 @@ class ServerAuth:
         except (KeyError, JWTError) as exc:
             log.debug("Delegation JWT rejected for %s: %s", self.client_id, exc)
             return None
+
+    def verify_platform_service(self, token: str) -> str:
+        """The issuing service's name when `token` is a platform service JWT addressed to this
+        persona and signed by that service's enrolled key; "" otherwise."""
+        if not token or token.count(".") != 2:
+            return ""
+        try:
+            unverified = jose_jwt.get_unverified_claims(token)
+        except JWTError:
+            return ""
+        iss = str(unverified.get("iss") or "")
+        if unverified.get("principal_type") != "service" or not iss or iss == "origin":
+            return ""
+        try:
+            claims = authority_trust.verify_service_jwt(
+                token, expected_issuer=iss, expected_audience=self.client_id)
+        except Exception:  # noqa: BLE001 — unknown issuer, bad signature, wrong audience
+            return ""
+        return iss if claims.get("principal_type") == "service" else ""
 
     def verify_origin_delegation(self, token: str) -> dict | None:
         """Verify a delegation minted by ORIGIN for this persona.
@@ -505,6 +532,7 @@ class ServerAuth:
                 # to that user via Origin. Either way the ContextVar ends up holding
                 # a delegation the persona may present back to Mantle.
                 caller = ""
+                service = ""
                 if auth.verify_delegation_jwt(raw_token):
                     stored = raw_token            # Mantle-minted delegation for us
                 elif auth.verify_origin_delegation(raw_token):
@@ -515,6 +543,8 @@ class ServerAuth:
                     # what it may do, and Mantle decides every read and write it makes. It is
                     # presented to Mantle as-is; there is no person to exchange it for.
                     stored = raw_token
+                elif (service := auth.verify_platform_service(raw_token)):
+                    stored = ""                   # a platform service: no person to act for
                 else:
                     stored = await auth._mint_delegation_for_user(raw_token) or ""
                     caller = raw_token if stored else ""
@@ -523,7 +553,7 @@ class ServerAuth:
                 # three routes above — no token, a malformed one, one issued to a different
                 # persona, or a user token Origin declined to exchange. Every one of those is an
                 # unauthenticated request.
-                if auth.require_auth and not stored:
+                if auth.require_auth and not stored and not service:
                     # CORS preflight is exempt: a browser sends `OPTIONS` with no `Authorization`
                     # header by specification, to ask whether it may send one. Answering 401 here
                     # would mean no browser could ever reach this persona — a CORS failure
@@ -534,9 +564,11 @@ class ServerAuth:
 
                 tok = auth.request_user_token.set(stored)
                 ctok = auth.request_caller_token.set(caller)
+                stok = auth.request_service_caller.set(service)
                 try:
                     await self._app(scope, receive, send)
                 finally:
+                    auth.request_service_caller.reset(stok)
                     auth.request_caller_token.reset(ctok)
                     auth.request_user_token.reset(tok)
 

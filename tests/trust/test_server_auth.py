@@ -744,3 +744,55 @@ def test_a_delegation_addressed_to_this_persona_is_never_passed_on(floor):
     auth = _auth(token_exchange=_never_called)
     assert asyncio.run(_caller_seen(auth, _origin_delegation(floor["origin"]))) == ""
     assert asyncio.run(_caller_seen(auth, _mantle_delegation(floor["mantle"]))) == ""
+
+
+# ── a platform service as the caller ─────────────────────────────────────────────────────────────
+# 2026-10-19: platform mail runs with no person behind it (a payment webhook), so the platform
+# service that triggers it must reach the persona that sends it; every caller that was not a
+# person, a delegation or a grant key was refused at the door.
+
+def _service_jwt(svc, *, aud=CLIENT_ID, principal_type="service", ttl=300):
+    return svc.sign({"iss": svc.name, "sub": svc.name, "aud": aud, "principal_type": principal_type,
+                     "iat": _now(), "exp": _now() + ttl})
+
+
+async def _drive_service(auth, token):
+    seen = {}
+
+    async def _inner(scope, receive, send):
+        seen["service"] = auth.request_service_caller.get("")
+        seen["user"] = auth.request_user_token.get("")
+
+    sent = {}
+
+    async def _send(message):
+        if message["type"] == "http.response.start":
+            sent["status"] = message["status"]
+
+    app = auth.make_middleware_class()(_inner)
+    await app({"type": "http", "method": "POST",
+               "headers": [(b"authorization", f"Bearer {token}".encode())]}, None, _send)
+    return seen, sent
+
+
+def test_a_platform_service_addressed_to_this_persona_reaches_it_as_a_service(floor):
+    auth = _auth(token_exchange=_never_called)
+    seen, sent = asyncio.run(_drive_service(auth, _service_jwt(floor["chorus"])))
+    assert seen == {"service": "chorus", "user": ""}, "a service, with no person to act for"
+    assert not sent
+    assert auth.request_service_caller.get("") == "", "the ContextVar leaked past the request"
+
+
+@pytest.mark.parametrize("bad", ["other-audience", "user-type", "expired", "unanchored", "origin"])
+def test_any_other_service_token_is_refused(floor, bad):
+    auth = _auth(token_exchange=_never_called)
+    stranger = _Service("stranger")
+    token = {
+        "other-audience": lambda: _service_jwt(floor["chorus"], aud="agience-server-sage"),
+        "user-type": lambda: _service_jwt(floor["chorus"], principal_type="user"),
+        "expired": lambda: _service_jwt(floor["chorus"], ttl=-60),
+        "unanchored": lambda: _service_jwt(stranger),
+        "origin": lambda: _service_jwt(floor["origin"]),
+    }[bad]()
+    seen, sent = asyncio.run(_drive_service(auth, token))
+    assert seen == {} and sent.get("status") == 401
