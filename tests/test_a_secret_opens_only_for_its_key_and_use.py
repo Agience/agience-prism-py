@@ -21,7 +21,9 @@ def _key():
 
 def _jwk(key):
     nums = key.public_key().public_numbers()
-    b = lambda i: sealing._b64(i.to_bytes((i.bit_length() + 7) // 8, "big"))
+
+    def b(i):
+        return sealing._b64(i.to_bytes((i.bit_length() + 7) // 8, "big"))
     return {"kty": "RSA", "n": b(nums.n), "e": b(nums.e), "kid": "lumen-1"}
 
 

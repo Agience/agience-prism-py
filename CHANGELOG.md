@@ -6,6 +6,11 @@ All notable changes to `agience-prism` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-22
+
+### Fixed
+- A test no longer assigns a lambda to a name, which GitHub's lint step refused (ruff E731) on `main` and the `v0.1.5` tag.
+
 ## [0.1.5] - 2026-10-18
 
 ### Added
