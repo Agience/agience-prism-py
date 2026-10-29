@@ -6,6 +6,11 @@ All notable changes to `agience-prism` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-29
+
+### Added
+- `.github/workflows/publish.yml` now also runs on pushes to `release/**` branches. It builds and checks the package as it does for version tags, then keeps the files as a `dist` artifact so the platform release deploys exactly that build.
+
 ## [0.1.6] - 2026-10-22
 
 ### Fixed
