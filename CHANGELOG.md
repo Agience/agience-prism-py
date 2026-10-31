@@ -6,6 +6,14 @@ All notable changes to `agience-prism` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-31
+
+### Added
+- `prism.trust.shamir`: Shamir k-of-n secret sharing over GF(256), standard library only. It is the one implementation in the platform: Origin's key oracle re-exports it as `origin.services.shamir`, and Mantle's threshold master-key custody splits and combines with it.
+
+### Fixed
+- `shamir.combine` refuses shares of different lengths, a share whose x-coordinate is outside 1..255, and duplicate x-coordinates. The copy Origin held returned wrong bytes with no error for a shorter first share and for x = 0.
+
 ## [0.1.7] - 2026-10-29
 
 ### Added
