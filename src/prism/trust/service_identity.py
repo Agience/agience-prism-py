@@ -48,6 +48,11 @@ SERVICE_NAMES = ("origin", "mantle", "chorus", "crystal", "lumen")
 #: claim, so the actor on a delegation was asserted, not proven.
 PERSONA_NAMES = ("aria", "astra", "sage", "iris", "ophan", "seraph", "lumen")
 
+#: The services that hold a server delegation of their own (`agience-server-<name>`, signed for
+#: by that service's own key): the personas, and Crystal (review 28). Origin's persona rule and
+#: Mantle's server-delegation routes both read this one list.
+SERVER_DELEGATION_SIGNERS = PERSONA_NAMES + ("crystal",)
+
 # Default service-to-service JWT TTL (seconds). Short — these tokens are issued
 # fresh per call. Override per-call if a longer TTL is genuinely needed.
 DEFAULT_TTL_SECONDS = 300

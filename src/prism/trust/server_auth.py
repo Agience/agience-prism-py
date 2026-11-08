@@ -10,7 +10,7 @@
     *Minting* a token needs user records, WebAuthn, a database and key custody. It is stateful and
     per-deployment. It lives in Origin, and is reached over the wire at `ORIGIN_URI`.
 
-The one HTTP call in here follows from that: `_mint_delegation_for_user` is a *client of* issuance.
+The one HTTP call in here follows from that: `_mint_delegation_for_narrowed` is a *client of* issuance.
 Origin verifies the subject token, derives the subject itself, and holds the signing key; this side
 only asks.
 
@@ -74,11 +74,34 @@ from jose import jwt as jose_jwt, JWTError
 from . import authority_trust, service_identity
 from .authority_trust import (
     verify_access_token as _verify_access_token,
-    verify_delegation_jwt as _verify_delegation_jwt,
-    verify_jwt as _verify_jwt,
+    verify_origin_jwt as _verify_origin_jwt,
 )
 
 log = logging.getLogger(__name__)
+
+#: The describe exchange's seam (review 23, L1): given the Origin base URI, the describe delegation
+#: Crystal sent this persona and the Authorization header value to present, return the persona's own
+#: copy addressed to Mantle, or ``None``.
+DescribeExchange = Callable[[str, str, str], Awaitable[Optional[str]]]
+
+
+async def _stdlib_describe_exchange(origin_uri: str, subject_token: str,
+                                    authorization: str) -> Optional[str]:
+    """The default describe exchange: `POST {origin_uri}/internal/describe-delegation/for-mantle`."""
+
+    def _post() -> Optional[str]:
+        req = urllib.request.Request(
+            f"{origin_uri}/internal/describe-delegation/for-mantle",
+            data=json.dumps({"subject_token": subject_token}).encode("utf-8"),
+            headers={"Authorization": authorization, "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=8.0) as resp:      # raises on 4xx/5xx
+            payload = json.loads(resp.read().decode("utf-8"))
+        return payload.get("token") if isinstance(payload, dict) else None
+
+    return await asyncio.to_thread(_post)
+
 
 #: The injected issuance-client seam. Given the Origin base URI, this persona's client id, the
 #: caller's raw user token and the Authorization header value to present, return the delegation
@@ -211,6 +234,7 @@ class ServerAuth:
         agience_api_uri: str,
         *,
         token_exchange: Optional[TokenExchange] = None,
+        describe_exchange: Optional[DescribeExchange] = None,
         require_auth: bool = True,
     ) -> None:
         from .. import config
@@ -225,11 +249,12 @@ class ServerAuth:
         # that gets exported in a shell, forgotten, and inherited by a process nobody meant it for.
         # Turning this off is an explicit keyword at a construction site, where review can see it.
         self.require_auth = require_auth
-        # Origin mints the delegation when a caller forwards a raw user token
-        # (the gateway model — see `_mint_delegation_for_user`). Read once at
-        # construction rather than on every call.
+        # Origin mints this persona's server delegation from the delegation it narrowed to this
+        # persona (`_mint_delegation_for_narrowed`); a person's own token is never exchanged
+        # (review 27). Read once at construction rather than on every call.
         self.origin_uri = config.origin_uri().rstrip("/")
         self._token_exchange: TokenExchange = token_exchange or _stdlib_token_exchange
+        self._describe_exchange: DescribeExchange = describe_exchange or _stdlib_describe_exchange
 
         # Per-request ContextVar — name includes client_id so multiple personas
         # mounted in one process stay isolated.
@@ -237,10 +262,8 @@ class ServerAuth:
             f"agience_request_user_token_{client_id}", default=""
         )
         #: The caller's own credential, for a call this persona makes to ANOTHER persona through the
-        #: gateway: a person's access token (which that persona exchanges for a delegation of its
-        #: own) or a grant key. Empty when the caller sent a delegation, which is addressed to this
-        #: persona and no other. 2026-10-18: a persona forwarded its own delegation to another
-        #: persona, which refused it, so every cross-persona workflow step answered 401.
+        #: gateway: a grant key only. A person's token is never kept to pass on (review 11, H3):
+        #: a person reaches another persona only through a delegation Origin narrows to that one.
         self.request_caller_token: contextvars.ContextVar[str] = contextvars.ContextVar(
             f"agience_request_caller_token_{client_id}", default=""
         )
@@ -256,32 +279,6 @@ class ServerAuth:
     # ------------------------------------------------------------------
     # Inbound JWT verification (delegation, user)
     # ------------------------------------------------------------------
-
-    def verify_delegation_jwt(self, token: str) -> dict | None:
-        """Verify a delegation JWT issued by Mantle with `aud == self.client_id`.
-
-        Validates:
-        - RS256 signature against Mantle's inline JWKS in the authority manifest
-        - `iss == "mantle"`
-        - `aud == self.client_id`
-        - `principal_type == "delegation"`
-        - `act.sub == "mantle"`
-        - Token not expired
-
-        Returns decoded claims on success, ``None`` on any failure.
-        """
-        if not token:
-            return None
-        try:
-            return _verify_delegation_jwt(
-                token,
-                expected_issuer="mantle",
-                expected_audience=self.client_id,
-                expected_actor="mantle",
-            )
-        except (KeyError, JWTError) as exc:
-            log.debug("Delegation JWT rejected for %s: %s", self.client_id, exc)
-            return None
 
     def verify_platform_service(self, token: str) -> str:
         """The issuing service's name when `token` is a platform service JWT addressed to this
@@ -307,8 +304,10 @@ class ServerAuth:
 
         Two Origin-minted shapes verify identically here: the gateway user
         exchange (`/internal/delegation-token`, sub=user) and the autonomous
-        event-driven describer (`/internal/describe-delegation`, sub=operator-
-        rooted system principal, scope=platform.describe). Both carry aud=this
+        event-driven describer (`/internal/describe-delegation`, which only Crystal
+        may ask, sub=operator-rooted system principal, scope=platform.describe).
+        Neither opens a secret on its own: that needs Origin's verdict for this
+        persona's own proven delegation (`prism.trust.use_verdict`). Both carry aud=this
         client_id, act.sub=this client_id, iss=AUTHORITY_ISSUER, and are signed by
         Origin's key — so verify against the `origin` anchor's JWKS with the
         iss-claim check skipped (iss is the issuer URL, not the service name
@@ -318,7 +317,7 @@ class ServerAuth:
         if not token:
             return None
         try:
-            claims = _verify_jwt(token, expected_issuer_service="origin")
+            claims = _verify_origin_jwt(token)
         except (KeyError, JWTError) as exc:
             log.debug("Origin delegation rejected for %s: %s", self.client_id, exc)
             return None
@@ -327,6 +326,11 @@ class ServerAuth:
         if claims.get("aud") != self.client_id:
             return None
         if (claims.get("act") or {}).get("sub") != self.client_id:
+            return None
+        # One this persona asked for itself (`act.iss` its own name) is one it made to send on,
+        # never a caller's (review 22): whoever it was sent to cannot hand it back.
+        if self.persona and (claims.get("act") or {}).get("iss") == self.persona:
+            log.warning("%s refused a delegation it asked for itself", self.client_id)
             return None
         return claims
 
@@ -338,8 +342,8 @@ class ServerAuth:
         refresh, email-verification or password-reset token is refused, as is a program's token,
         and a first-party user token must be addressed to the authority issuer. An `mcp_client`
         token's audience is the requesting client, so the caller gets the claims and inspects
-        `aud` itself. Delegations are refused here: they go through `verify_delegation_jwt` /
-        `verify_origin_delegation`, which also check the actor.
+        `aud` itself. Delegations are refused here: they go through `verify_origin_delegation` /
+        `verify_narrowed_delegation`, which also check the actor.
 
         Returns decoded claims on success, ``None`` on any failure.
         """
@@ -350,6 +354,27 @@ class ServerAuth:
         except (KeyError, JWTError) as exc:
             log.debug("User JWT rejected for %s: %s", self.client_id, exc)
             return None
+
+    def verify_narrowed_delegation(self, token: str) -> dict | None:
+        """Verify Origin's delegation narrowed to this persona (review 11, H3): Origin's token
+        exchange issued it for a person, `aud` = `act.sub` = this persona's narrow name (`iris`
+        for `agience-server-iris`), scope `persona:<name>` and nothing that reaches further. It is
+        what a facet sends a persona in place of the person's own token. Returns claims or None."""
+        name = self.persona
+        if not token or not name:
+            return None
+        try:
+            claims = _verify_origin_jwt(token)
+        except (KeyError, JWTError) as exc:
+            log.debug("narrowed delegation rejected for %s: %s", self.client_id, exc)
+            return None
+        scopes = str(claims.get("scope") or "").split()
+        if (claims.get("principal_type") != "delegation" or claims.get("aud") != name
+                or (claims.get("act") or {}).get("sub") != name
+                or f"persona:{name}" not in scopes
+                or any(not s.startswith(f"persona:{name}") for s in scopes)):
+            return None
+        return claims
 
     # Back-compat alias: some callers still use this name. Equivalent semantics.
     def verify_core_jwt(self, token: str) -> dict | None:
@@ -403,34 +428,25 @@ class ServerAuth:
     # Forwarded user token -> delegation (the gateway model)
     # ------------------------------------------------------------------
 
-    async def _mint_delegation_for_user(self, user_token: str) -> str | None:
-        """Exchange a forwarded user token for a delegation rooted to that user.
-
-        This is a client of issuance, not issuance. Origin owns the signing key and is the sole
-        authority on who the subject is; this side never asserts a `user_id`. That is why the call
-        travels with the verifier while the minter stays a service.
-
-        In the gateway model the caller forwards the user's Origin token (not a Mantle-minted
-        delegation). To act on the user's behalf with the persona recorded in the chain, this
-        forwards the raw user token to Origin as the `subject_token`; Origin verifies it and
-        derives the subject itself, then mints an RFC 8693 delegation (sub=user, act.sub=this
-        persona, aud=this persona). A local fast-fail verify avoids a round-trip on obvious garbage;
-        Origin re-verifies authoritatively. Returns the delegation, or `None` if the token is not a
-        valid user token or the mint fails — the caller falls back to the persona's own service
-        identity.
-        """
-        # Fast-fail on obviously-invalid tokens; Origin is the authority.
-        if not self.verify_user_jwt(user_token):
+    async def _copy_for_mantle(self, describe: str) -> str | None:
+        """This persona's own copy, addressed to Mantle, of the describe delegation Crystal sent it
+        (review 23, L1), exchanged at Origin signing with this persona's own key."""
+        try:
+            return await self._describe_exchange(
+                self.origin_uri, describe, f"Bearer {self.sign_exchange_jwt()}")
+        except Exception as exc:                                  # noqa: BLE001
+            log.warning("describe exchange for %s failed: %s", self.client_id, exc)
             return None
+
+    async def _mint_delegation_for_narrowed(self, narrowed: str) -> str | None:
+        """Exchange Origin's delegation narrowed to this persona for this persona's own server
+        delegation (`/internal/delegation-token`, signed by this persona's key). Origin accepts a
+        narrowed delegation as the subject only when its audience is the persona asking."""
         try:
             return await self._token_exchange(
-                self.origin_uri,
-                self.client_id,
-                user_token,
-                f"Bearer {self.sign_exchange_jwt()}",
-            )
-        except Exception as exc:  # noqa: BLE001 — any transport failure is a failed mint
-            log.warning("delegation mint failed for %s: %s", self.client_id, exc)
+                self.origin_uri, self.client_id, narrowed, f"Bearer {self.sign_exchange_jwt()}")
+        except Exception as exc:                                  # noqa: BLE001
+            log.warning("delegation exchange for %s failed: %s", self.client_id, exc)
             return None
 
     # ------------------------------------------------------------------
@@ -531,23 +547,49 @@ class ServerAuth:
                 # user token (the gateway model), exchange it for a delegation rooted
                 # to that user via Origin. Either way the ContextVar ends up holding
                 # a delegation the persona may present back to Mantle.
+                # A persona never receives or forwards a person's full access token (review 11,
+                # H3): a facet sends Origin's delegation narrowed to this persona, which is
+                # exchanged at Origin for this persona's own server delegation. A person's own
+                # token is refused, never exchanged, and never kept to be passed on.
                 caller = ""
                 service = ""
-                if auth.verify_delegation_jwt(raw_token):
-                    stored = raw_token            # Mantle-minted delegation for us
-                elif auth.verify_origin_delegation(raw_token):
-                    stored = raw_token            # Origin-minted delegation for us (gateway/event path)
+                claims = None
+                # Only Origin signs a delegation a persona takes (review 19, H2): Mantle mints
+                # none, so one signed by Mantle's key is no one's here.
+                if (claims := auth.verify_origin_delegation(raw_token)):
+                    # Origin-minted delegation for us (gateway/event path). A describe delegation
+                    # goes to Mantle only as this persona's own copy (review 23, L1), which no
+                    # persona takes inbound, so Mantle cannot hand it back here.
+                    if claims.get("scope") == "platform.describe":
+                        stored = await auth._copy_for_mantle(raw_token) or ""
+                    else:
+                        stored = raw_token
+                elif (claims := auth.verify_narrowed_delegation(raw_token)):
+                    stored = await auth._mint_delegation_for_narrowed(raw_token) or ""
                 elif is_grant_key(raw_token):
                     caller = raw_token
                     # A grant key a person issued (an agent, a timer): its grants are the whole of
                     # what it may do, and Mantle decides every read and write it makes. It is
-                    # presented to Mantle as-is; there is no person to exchange it for.
+                    # presented to Mantle as-is; there is no person to exchange it for. Timers and
+                    # cross-persona workflows run on one, so it is kept here; it uses no secret
+                    # (review 21): a sealed secret opens only on Origin's verdict for an Origin
+                    # delegation (`prism.trust.use_verdict`), which a grant key is not.
                     stored = raw_token
                 elif (service := auth.verify_platform_service(raw_token)):
                     stored = ""                   # a platform service: no person to act for
                 else:
-                    stored = await auth._mint_delegation_for_user(raw_token) or ""
-                    caller = raw_token if stored else ""
+                    if raw_token and auth.verify_user_jwt(raw_token):
+                        log.warning("%s refused a person's own access token: a persona takes only "
+                                    "the delegation Origin narrows to it", auth.client_id)
+                    stored = ""
+                # Origin's sign-in bounds (review 11, M2): a token issued before its person's
+                # sign-out, or a signing-key rollover, is no longer good here either.
+                if stored and claims is not None:
+                    from . import not_before as _nb
+                    if _nb.refused(claims):
+                        log.info("%s refused a token issued before its sign-in bound",
+                                 auth.client_id)
+                        stored = ""
 
                 # `stored` is empty exactly when no delegation could be established by any of the
                 # three routes above — no token, a malformed one, one issued to a different
@@ -664,4 +706,5 @@ class ServerAuth:
 #: All seven chorus personas import this name. `ServerAuth` is the same class under both names.
 AgienceServerAuth = ServerAuth
 
-__all__ = ["ServerAuth", "AgienceServerAuth", "MissingDelegationError", "TokenExchange"]
+__all__ = ["ServerAuth", "AgienceServerAuth", "MissingDelegationError", "TokenExchange",
+           "DescribeExchange"]

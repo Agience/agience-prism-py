@@ -6,6 +6,59 @@ All notable changes to `agience-prism` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-08
+
+### Changed (review 31)
+- The version is 0.1.9. 0.1.8 is already tagged, and the changes below shipped after it, so Origin, Mantle, Crystal, Chorus and Ember floor `agience-prism` at 0.1.9.
+
+### Changed (review 29)
+- `ledger.ENTRY_KINDS` includes `root.confirm_empty`, the operator's confirmation that nothing is left under a root's master key.
+
+### Changed (review 28)
+- `service_identity.SERVER_DELEGATION_SIGNERS`: the personas and Crystal, the services that hold a server delegation of their own.
+
+### Changed (review 27)
+- `shamir.shares_through` gives the other shares of the k=2 split a known share belongs to, so an interrupted split is finished with that share kept.
+- `ServerAuth._mint_delegation_for_user` is removed: a persona exchanges only the delegation Origin narrowed to it.
+
+### Changed (review 25)
+- `verify_jwt` also maps an `ArithmeticError` to `JWTError`.
+
+### Changed (review 24)
+- `verify_jwt` raises `JWTError` for a claim of the wrong type, such as a null or odd `exp`.
+
+### Changed (review 23)
+- A persona exchanges an inbound describe delegation for its own copy addressed to Mantle (`ServerAuth(describe_exchange=)`), and keeps only that.
+- The host `TokenVerifier` refuses a delegation naming no actor and a principal type that is neither a caller nor a service.
+
+### Changed (review 22)
+- `ServerAuth.verify_origin_delegation` refuses a delegation this persona asked for itself (`act.iss` its own name).
+- `use_verdict.verify` requires the sealed copy, the endpoint list and the nonce, and compares them with the verdict's `sealed_sha256`, `endpoints_sha256` and `nonce` (`sealed_digest`, `endpoints_digest`).
+
+### Changed (review 21)
+- `prism.trust.use_verdict`: the names of Origin's verdict for a secret's use, and the persona's check of it and of the delegation it acts on.
+- `TokenVerifier` ties each `kid` to its anchor and requires `iss` to be that anchor's name; only the `origin` anchor may sign as the manifest's issuer.
+
+### Changed (review 19)
+- A persona takes a delegation from Origin only: the Mantle-signed path is removed from the middleware and from `ServerAuth`, and `verify_delegation_jwt` refuses `expected_issuer="mantle"`.
+- `prism.trust.ledger.canonical_reach` and `canonical_expiry`: the one digest form, with expiry, invite target and claim limit.
+
+### Added (review 17)
+- `prism.trust.ledger`: the authority ledger's names, shared by Origin and Mantle (`CREDENTIAL_KINDS`, `MANTLE_APPLIES`, `ENTRY_KINDS`, `GENESIS`, `LEDGER_VERSION`, `COLLECTION_KEY_PREFIX`, `target_digest`).
+
+### Changed (review 14)
+- `NotBefore` accepts a bounds document only when its `iat` is no older than the last one accepted (kept in the state file), is inside the `STALE_SECONDS` window, and is not more than `SKEW_SECONDS` ahead of the clock. A replayed document is no good poll.
+
+### Changed (review 12)
+- `verify_origin_jwt`: an Origin token's `iss` must be the authority manifest's issuer. `verify_access_token`, `ServerAuth.verify_origin_delegation` and `verify_narrowed_delegation` use it, so another issuer's token (a staging Origin's) is refused.
+- The sign-in bounds poller reads Origin's rows by sequence (`after=<seq>`), keeps the bounds in its own state file (`NOT_BEFORE_STATE`, else `$KEYS_DIR/not_before.json`), refuses every token until its first good poll after a start and once its last good poll is older than `AGIENCE_NOT_BEFORE_STALE_SECONDS` (120), and refuses a token with no `iat`. `AGIENCE_NOT_BEFORE_NO_POLL` is honoured only under pytest.
+
+### Added (review 11)
+- `prism.trust.not_before`: Origin's published sign-in bounds (`GET /auth/not-before`), polled every 15 seconds and checked against Origin's signature; `refused(claims)` answers whether a token was issued before its person's bound or everyone's.
+
+### Changed (review 11)
+- A persona never receives or forwards a person's own access token: `ServerAuth` takes a caller only as Origin's delegation narrowed to that persona (`aud` = `act.sub` = its name, scope `persona:<name>`), which it exchanges for its own server delegation; a person's full token is refused, never exchanged, and never kept to pass on. Tokens issued before their person's sign-in bound are refused.
+
 ## [0.1.8] - 2026-10-31
 
 ### Added

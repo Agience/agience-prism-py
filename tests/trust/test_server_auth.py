@@ -127,6 +127,15 @@ def _origin_user_token(svc: _Service, *, aud=ISSUER_URL, sub="user-1", ttl=300, 
     return svc.sign(claims)
 
 
+def _narrowed_delegation(svc: _Service, *, sub="user-1", ttl=300) -> str:
+    """Origin's delegation narrowed to this persona (review 11, H3): what a facet sends it."""
+    return svc.sign({
+        "iss": ISSUER_URL, "sub": sub, "aud": "iris", "act": {"sub": "iris"},
+        "principal_type": "delegation", "scope": "persona:iris", "iat": _now(),
+        "exp": _now() + ttl,
+    })
+
+
 def _tamper_signature(token: str) -> str:
     """Flip one bit of one byte of the signature, and prove the bytes actually changed.
 
@@ -140,64 +149,28 @@ def _tamper_signature(token: str) -> str:
     return f"{head}.{payload}.{_b64u(bytes(raw))}"
 
 
-# ── verify_delegation_jwt: Mantle-minted, aud = this persona ───────────────────────────────────────
-def test_a_valid_mantle_delegation_verifies(floor):
-    """Positive control. Everything below asserts that a bad token does not verify; without this
-    one, a fixture that produced garbage would look like a working verifier."""
-    claims = _auth().verify_delegation_jwt(_mantle_delegation(floor["mantle"]))
-    assert claims is not None and claims["sub"] == "user-1"
-    assert claims["aud"] == CLIENT_ID and claims["act"]["sub"] == "mantle"
+# ── a delegation Mantle signs is no one's (review 19, H2) ───────────────────────────────────────────
+def test_a_persona_has_no_mantle_delegation_path(floor):
+    """Mantle mints no delegation for a persona, so a persona accepts none: only Origin's."""
+    assert not hasattr(_auth(), "verify_delegation_jwt")
 
 
-def test_a_tampered_signature_is_refused(floor):
-    """The negative control on the auth path: a tampered signature does not verify. Byte-level
-    tamper; see `_tamper_signature`.
+def test_the_shared_verifier_refuses_a_mantle_signed_delegation(floor):
+    from jose import JWTError
 
-    It isolates the signature as the cause: only the third segment changed, so the two tokens carry
-    byte-identical headers and byte-identical claims. That is asserted rather than assumed, since a
-    failure over an expired token or a missing `aud` would otherwise read as a signature check
-    working."""
-    auth, good = _auth(), _mantle_delegation(floor["mantle"])
-    assert auth.verify_delegation_jwt(good) is not None, "positive control failed FIRST"
-
-    bad = _tamper_signature(good)
-    assert bad.rsplit(".", 1)[0] == good.rsplit(".", 1)[0], "more than the signature changed"
-    assert jose_jwt.get_unverified_claims(bad) == jose_jwt.get_unverified_claims(good)
-    assert auth.verify_delegation_jwt(bad) is None
+    from prism.trust import authority_trust
+    with pytest.raises(JWTError, match="Origin"):
+        authority_trust.verify_delegation_jwt(
+            _mantle_delegation(floor["mantle"]), expected_issuer="mantle",
+            expected_audience=CLIENT_ID, expected_actor="mantle")
 
 
-def test_a_signature_from_the_wrong_service_is_refused(floor):
-    """Signed by origin's key, claiming `iss: mantle`. The claim is right and the key is wrong,
-    which is the check the JWKS anchor exists to make."""
-    forged = floor["origin"].sign({
-        "iss": "mantle", "sub": "user-1", "aud": CLIENT_ID, "act": {"sub": "mantle"},
-        "principal_type": "delegation", "iat": _now(), "exp": _now() + 300,
-    })
-    assert _auth().verify_delegation_jwt(forged) is None
-
-
-def test_a_delegation_for_another_persona_is_refused(floor):
-    assert _auth().verify_delegation_jwt(
-        _mantle_delegation(floor["mantle"], aud="agience-server-sage")) is None
-
-
-def test_a_delegation_with_the_wrong_actor_is_refused(floor):
-    assert _auth().verify_delegation_jwt(
-        _mantle_delegation(floor["mantle"], actor="chorus")) is None
-
-
-def test_an_expired_delegation_is_refused(floor):
-    assert _auth().verify_delegation_jwt(
-        _mantle_delegation(floor["mantle"], ttl=-60)) is None
-
-
-def test_a_non_delegation_principal_type_is_refused(floor):
-    assert _auth().verify_delegation_jwt(
-        _mantle_delegation(floor["mantle"], principal_type="service")) is None
-
-
-def test_an_empty_token_is_refused(floor):
-    assert _auth().verify_delegation_jwt("") is None
+def test_the_middleware_stores_nothing_for_a_mantle_signed_delegation(floor):
+    """The reviewer's case: Mantle signs `sub` = anyone, `aud` = this persona; the persona takes
+    it as no one's, and never presents it onward."""
+    auth = _auth(token_exchange=_declines, require_auth=False)
+    tok = _mantle_delegation(floor["mantle"], sub="victim-person")
+    assert asyncio.run(_run_middleware(auth, tok)) == ""
 
 
 # ── verify_origin_delegation: the gateway / event path ────────────────────────────────────────────
@@ -281,9 +254,8 @@ def test_an_mcp_client_token_is_a_user_token_for_its_own_client(floor):
 
 
 def test_a_refresh_token_never_reaches_the_exchange(floor):
-    """The fast-fail verify is what refuses it before Origin is asked. The exchange records its
-    calls rather than raising, because `_mint_delegation_for_user` swallows an exchange failure
-    into the same 401 a refusal produces."""
+    """Nothing but the persona's narrowed delegation is exchanged (review 11, H3): neither a
+    person's access token nor a refresh token reaches Origin from a persona."""
     asked: list = []
 
     async def _exchange(origin_uri, client_id, subject_token, authorization):
@@ -291,11 +263,13 @@ def test_a_refresh_token_never_reaches_the_exchange(floor):
         return None
 
     auth = _auth(token_exchange=_exchange)
-    asyncio.run(_drive(auth, _origin_user_token(floor["origin"])))
-    assert len(asked) == 1, "positive control: an access token is forwarded for exchange"
-    _, resp = asyncio.run(_drive(auth, _origin_user_token(floor["origin"], token_type="refresh")))
-    assert resp is not None and resp["status"] == 401
-    assert len(asked) == 1, "a refresh token was forwarded to Origin as a subject token"
+    asyncio.run(_drive(auth, _narrowed_delegation(floor["origin"])))
+    assert len(asked) == 1, "positive control: the narrowed delegation is exchanged"
+    for tok in (_origin_user_token(floor["origin"]),
+                _origin_user_token(floor["origin"], token_type="refresh")):
+        _, resp = asyncio.run(_drive(auth, tok))
+        assert resp is not None and resp["status"] == 401
+    assert len(asked) == 1, "a person's token was forwarded to Origin as a subject token"
 
 
 def test_verify_core_jwt_is_the_same_function(floor):
@@ -328,7 +302,7 @@ def test_user_headers_fall_back_to_the_service_jwt(floor):
 
 def test_user_headers_present_the_delegation_when_one_is_in_context(floor):
     auth = _auth()
-    tok = _mantle_delegation(floor["mantle"])
+    tok = _origin_delegation(floor["origin"])
     reset = auth.request_user_token.set(tok)
     try:
         assert auth.user_headers()["Authorization"] == f"Bearer {tok}"
@@ -347,7 +321,7 @@ def test_require_user_headers_raises_without_a_delegation(floor):
 
 def test_require_user_headers_returns_the_delegation_when_present(floor):
     auth = _auth()
-    tok = _mantle_delegation(floor["mantle"])
+    tok = _origin_delegation(floor["origin"])
     reset = auth.request_user_token.set(tok)
     try:
         assert auth.require_user_headers()["Authorization"] == f"Bearer {tok}"
@@ -409,10 +383,11 @@ async def _drive(auth, token: str, *, method: str = "POST", host: str = "aria.ho
     return seen.get("token", ""), (sent or None)
 
 
-def test_middleware_stores_a_mantle_delegation(floor):
-    auth = _auth(token_exchange=_never_called)
+def test_middleware_stores_no_mantle_delegation(floor):
+    """Review 19, H2: a delegation Mantle signed is refused, not stored."""
+    auth = _auth(token_exchange=_declines, require_auth=False)
     tok = _mantle_delegation(floor["mantle"])
-    assert asyncio.run(_run_middleware(auth, tok)) == tok
+    assert asyncio.run(_run_middleware(auth, tok)) == ""
     assert auth.request_user_token.get("") == "", "the ContextVar leaked past the request"
 
 
@@ -429,12 +404,13 @@ def test_middleware_stores_nothing_for_a_tampered_delegation(floor):
     # separate contract with its own tests below; conflating them would leave the "verifies as
     # neither shape" behaviour untested the day enforcement changes.
     auth = _auth(token_exchange=_declines, require_auth=False)
-    tampered = _tamper_signature(_mantle_delegation(floor["mantle"]))
+    tampered = _tamper_signature(_origin_delegation(floor["origin"]))
     assert asyncio.run(_run_middleware(auth, tampered)) == ""
 
 
-def test_middleware_exchanges_a_raw_user_token(floor):
-    """The gateway model: a forwarded user token is swapped for a delegation by Origin."""
+def test_middleware_exchanges_the_narrowed_delegation_and_refuses_a_raw_user_token(floor):
+    """A facet sends the persona's narrowed delegation, swapped for the persona's own by Origin;
+    a person's own token is refused and never forwarded (review 11, H3)."""
     calls: list = []
 
     async def _exchange(origin_uri, client_id, subject_token, authorization):
@@ -442,11 +418,13 @@ def test_middleware_exchanges_a_raw_user_token(floor):
         return "minted-delegation"
 
     auth = _auth(token_exchange=_exchange)
-    user = _origin_user_token(floor["origin"])
-    assert asyncio.run(_run_middleware(auth, user)) == "minted-delegation"
+    narrowed = _narrowed_delegation(floor["origin"])
+    assert asyncio.run(_run_middleware(auth, narrowed)) == "minted-delegation"
     assert len(calls) == 1
-    assert calls[0][1] == CLIENT_ID and calls[0][2] == user
+    assert calls[0][1] == CLIENT_ID and calls[0][2] == narrowed
     assert calls[0][3].startswith("Bearer ")
+    assert asyncio.run(_run_middleware(auth, _origin_user_token(floor["origin"]))) == ""
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize("key", ["agk_abc123", "0b6f1c1e-1111-4111-8111-111111111111:agk_abc123"])
@@ -545,7 +523,7 @@ for m in list(sys.modules):
 
 from prism.trust import ServerAuth, MissingDelegationError
 a = ServerAuth('agience-server-iris', 'http://mantle.test')
-assert a.verify_delegation_jwt('') is None
+assert a.verify_origin_delegation('') is None
 assert a.get_delegation_user_id() == 'anonymous'
 try:
     a.require_user_headers()
@@ -666,19 +644,22 @@ def test_a_VALID_delegation_still_passes_through(floor):
     """The control that makes the four cases above meaningful: middleware that returned 401
     unconditionally would also pass all four of them."""
     auth = _auth(token_exchange=_never_called)
-    tok = _mantle_delegation(floor["mantle"])
+    tok = _origin_delegation(floor["origin"])                     # only Origin's (review 19)
     seen, resp = asyncio.run(_drive(auth, tok))
     assert resp is None, "a valid delegation was refused"
     assert seen == tok
+    # A delegation Mantle signs is refused at the same door.
+    _seen, resp = asyncio.run(_drive(auth, _mantle_delegation(floor["mantle"])))
+    assert resp is not None and resp["status"] == 401
 
 
-def test_an_exchanged_user_token_still_passes_through(floor):
-    """The gateway model must survive enforcement: a raw user token Origin exchanges is authenticated."""
+def test_an_exchanged_narrowed_delegation_still_passes_through(floor):
+    """The gateway model survives enforcement on the narrowed delegation Origin exchanges."""
     async def _exchange(origin_uri, client_id, subject_token, authorization):
         return "minted-delegation"
 
     auth = _auth(token_exchange=_exchange)
-    seen, resp = asyncio.run(_drive(auth, _origin_user_token(floor["origin"])))
+    seen, resp = asyncio.run(_drive(auth, _narrowed_delegation(floor["origin"])))
     assert resp is None and seen == "minted-delegation"
 
 
@@ -727,16 +708,14 @@ async def _caller_seen(auth, token: str) -> str:
     return seen.get("caller", "")
 
 
-def test_the_callers_own_token_is_kept_for_a_call_to_another_persona(floor):
-    """A person's token is kept beside the delegation it was exchanged for, so a call this persona
-    makes to ANOTHER persona carries what that persona can exchange for itself. 2026-10-18: a
-    persona forwarded its own delegation, the next persona refused it, and every cross-persona
-    workflow step answered 401."""
+def test_only_a_grant_key_is_kept_for_a_call_to_another_persona(floor):
+    """No person's token is kept to pass on (review 11, H3); a grant key is, since its grants are
+    the whole of what it may do."""
     async def _exchange(*a):
         return "minted-delegation"
 
-    user = _origin_user_token(floor["origin"])
-    assert asyncio.run(_caller_seen(_auth(token_exchange=_exchange), user)) == user
+    narrowed = _narrowed_delegation(floor["origin"])
+    assert asyncio.run(_caller_seen(_auth(token_exchange=_exchange), narrowed)) == ""
     assert asyncio.run(_caller_seen(_auth(token_exchange=_never_called), "agk_abc")) == "agk_abc"
 
 

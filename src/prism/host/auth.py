@@ -4,11 +4,12 @@ A host authorizes inbound calls with, in precedence order:
 
   1. **Authority JWT (primary).** An RS256 JWT signed by a member of the
      platform *authority* — Origin's authority manifest (origin / mantle /
-     chorus). Trust is "the signing key, selected by ``kid``, is present in the
-     authority's published JWKS." So a service that self-signs (e.g. Mantle:
-     ``iss=mantle, aud=<host>``) verifies here, and an Origin-issued OAuth2
-     token (``kid=origin-1, aud=agience``) verifies the same way — no special
-     casing, no per-issuer code.
+     chorus). The signing key is selected by ``kid``, and the token's ``iss`` must
+     name the anchor that key is listed under: a service that self-signs (e.g.
+     Mantle: ``iss=mantle, aud=<host>``) verifies here as Mantle, and only the
+     ``origin`` anchor's key may sign as the manifest's issuer (an Origin-issued
+     OAuth2 token, ``kid=origin-1, aud=agience``). A key from a JWKS URL is the
+     authority's own, read as the ``origin`` anchor.
 
   2. **Local HS256 JWT (fallback).** A JWT signed with a shared secret held
      locally on the host. The standalone/dev path when no authority is
@@ -49,6 +50,15 @@ from ..access_token import purpose_refusal
 from ..errors import AuthError  # re-exported here: callers catch it from this module
 
 log = logging.getLogger("agience.host.auth")
+
+
+#: The trust anchor whose key signs Origin's own tokens, and the only one that may sign as the
+#: manifest's issuer.
+ORIGIN_ANCHOR = "origin"
+
+#: The principal types a host takes: a person, an MCP client acting for one, a delegation, or a
+#: platform service. A `server` credential or anything else is refused.
+HOST_PRINCIPAL_TYPES = frozenset({"user", "mcp_client", "delegation", "service"})
 
 
 def _looks_like_jwt(token: str) -> bool:
@@ -98,6 +108,7 @@ class TokenVerifier:
         self.allow_open = bool(allow_open)
         self.any_audience = bool(any_audience)
         self._manifest_keys: Optional[dict] = None
+        self._manifest_issuer: Optional[str] = None
         self._jwk_client: Any = None
 
     # -- api keys (inline + hot-reloaded directory) -------------------------
@@ -189,7 +200,9 @@ class TokenVerifier:
 
     # -- key sources --------------------------------------------------------
     def _load_manifest_keys(self, *, force: bool = False) -> dict:
-        """Map ``kid`` -> public key from every trust anchor in the manifest."""
+        """Map ``kid`` -> ``(public key, anchor name)`` from every trust anchor in the manifest,
+        and remember the manifest's issuer. A ``kid`` two anchors both list is dropped: it could
+        not say whose key it is."""
         if self._manifest_keys is not None and not force:
             return self._manifest_keys
         keys: dict = {}
@@ -199,27 +212,36 @@ class TokenVerifier:
                 import jwt as _jwt  # PyJWT
 
                 raw = json.loads(Path(path).read_text(encoding="utf-8"))
-                jwk_list: list = []
-                for anchor in (raw.get("trust_anchors") or {}).values():
-                    jwk_list.extend(((anchor or {}).get("jwks") or {}).get("keys") or [])
-                if jwk_list:
+                self._manifest_issuer = str(raw.get("issuer") or "") or None
+                seen: dict = {}
+                for name, anchor in (raw.get("trust_anchors") or {}).items():
+                    jwk_list = ((anchor or {}).get("jwks") or {}).get("keys") or []
+                    if not jwk_list:
+                        continue
                     for k in _jwt.PyJWKSet.from_dict({"keys": jwk_list}).keys:
-                        if k.key_id:
-                            keys[k.key_id] = k.key
+                        if not k.key_id:
+                            continue
+                        if k.key_id in seen and seen[k.key_id] != name:
+                            keys.pop(k.key_id, None)
+                            log.warning("kid %s is listed under two anchors; refused", k.key_id)
+                            continue
+                        seen[k.key_id] = name
+                        keys[k.key_id] = (k.key, str(name))
             except Exception:
                 log.warning("authority manifest parse failed: %s", path, exc_info=True)
         self._manifest_keys = keys
         return keys
 
     def _resolve_rs256_key(self, token: str):
-        """Find the verifying key for ``token`` by ``kid`` (JWKS URL, then manifest)."""
+        """The verifying key for ``token`` by ``kid``, and the anchor it belongs to: a key from
+        the JWKS URL is the authority's (``origin``); otherwise the manifest's anchor."""
         import jwt as _jwt
 
         if self.authority_jwks_url:
             try:
                 if self._jwk_client is None:
                     self._jwk_client = _jwt.PyJWKClient(self.authority_jwks_url)
-                return self._jwk_client.get_signing_key_from_jwt(token).key
+                return self._jwk_client.get_signing_key_from_jwt(token).key, ORIGIN_ANCHOR
             except Exception:
                 pass  # fall through to the manifest file
         kid = _jwt.get_unverified_header(token).get("kid")
@@ -230,6 +252,23 @@ class TokenVerifier:
             return keys[kid]
         # Unknown kid — keys may have rotated; reload the manifest once.
         return self._load_manifest_keys(force=True).get(kid)
+
+    def _issuer_ok(self, claims: dict, anchor: str) -> bool:
+        """A token's ``iss`` must name the anchor whose key signed it (review 21, F2). Only the
+        ``origin`` anchor may also sign as the manifest's issuer, Origin's own URL; with no
+        manifest loaded, as an issuer this verifier was told to allow."""
+        iss = claims.get("iss")
+        if not isinstance(iss, str) or not iss:
+            return False
+        if iss == anchor:
+            return True
+        if anchor != ORIGIN_ANCHOR:
+            return False
+        if self._manifest_issuer is None and self.authority_manifest_path:
+            self._load_manifest_keys()
+        if self._manifest_issuer:
+            return iss == self._manifest_issuer
+        return iss in self.allowed_issuers
 
     # -- verify -------------------------------------------------------------
     def verify(self, authorization: Optional[str]) -> None:
@@ -255,8 +294,18 @@ class TokenVerifier:
             return
         raise AuthError("invalid or missing credential")
 
-    def _verify_claims_ok(self, claims: dict) -> bool:
+    def _verify_claims_ok(self, claims: dict, anchor: Optional[str] = None) -> bool:
         if purpose_refusal(claims):
+            return False
+        # A caller or a service only, and a delegation names its acting server (review 23, I1).
+        ptype = claims.get("principal_type") or "user"
+        if ptype not in HOST_PRINCIPAL_TYPES:
+            return False
+        if ptype == "delegation":
+            act = claims.get("act")
+            if not isinstance(act, dict) or not isinstance(act.get("sub"), str) or not act["sub"]:
+                return False
+        if anchor is not None and not self._issuer_ok(claims, anchor):
             return False
         if self.allowed_issuers and claims.get("iss") not in self.allowed_issuers:
             return False
@@ -270,9 +319,10 @@ class TokenVerifier:
         try:
             import jwt as _jwt
 
-            key = self._resolve_rs256_key(token)
-            if key is None:
+            found = self._resolve_rs256_key(token)
+            if found is None:
                 return False
+            key, anchor = found
             claims = _jwt.decode(
                 token,
                 key,
@@ -281,7 +331,7 @@ class TokenVerifier:
                 options={"verify_aud": bool(self.expected_audiences)},
                 leeway=self.leeway,
             )
-            return self._verify_claims_ok(claims)
+            return self._verify_claims_ok(claims, anchor)
         except Exception:
             return False
 

@@ -190,7 +190,14 @@ def verify_jwt(
     if expected_issuer_claim is not None:
         decode_kwargs["issuer"] = expected_issuer_claim
 
-    claims = jose_jwt.decode(token, **decode_kwargs)
+    try:
+        claims = jose_jwt.decode(token, **decode_kwargs)
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        # A null or odd `exp` (or another claim of the wrong type, or one past any date) is a bad
+        # token like any other (reviews 24 and 25): every caller catches `JWTError`, and nothing
+        # else is a refusal.
+        from jose.exceptions import JWTError
+        raise JWTError(f"a claim has the wrong type: {type(exc).__name__}") from None
 
     if audience_list is not None:
         token_aud = claims.get("aud")
@@ -207,6 +214,14 @@ def verify_jwt(
             raise JWTError("token has no audience claim")
 
     return claims
+
+
+def verify_origin_jwt(token: str, *, expected_audience: Optional[Any] = None) -> Dict[str, Any]:
+    """An Origin-signed token, its signature against the manifest's `origin` anchor and its `iss`
+    against the manifest's issuer (review 12, H4): a token from another issuer, a staging Origin's
+    included, is refused even where it is signed by a key the manifest happens to trust."""
+    return verify_jwt(token, expected_issuer_service="origin", expected_audience=expected_audience,
+                      expected_issuer_claim=get_authority_manifest().issuer)
 
 
 def verify_access_token(
@@ -231,7 +246,7 @@ def verify_access_token(
     """
     from ..access_token import caller_refusal
 
-    claims = verify_jwt(token, expected_issuer_service="origin")
+    claims = verify_origin_jwt(token)
     refused = caller_refusal(
         claims,
         issuer=get_authority_manifest().issuer,
@@ -282,7 +297,12 @@ def verify_delegation_jwt(
 
     The caller is responsible for further checking `sub` (the user being delegated
     to) against their own grant model. This function only validates the envelope.
+
+    A delegation Mantle signs is refused whatever it claims (review 19, H2): Mantle mints none, so
+    only Origin's (and a service's own, to its own peer) are delegations.
     """
+    if expected_issuer == "mantle":
+        raise JWTError("Mantle signs no delegation; only Origin's are taken")
     claims = verify_service_jwt(
         token,
         expected_issuer=expected_issuer,

@@ -93,3 +93,20 @@ def combine(shares: List[Share]) -> bytes:
             secret_byte ^= _mul(yi[pos], _div(num, den))
         out.append(secret_byte)
     return bytes(out)
+
+
+def shares_through(secret: bytes, known: Share, xs: List[int]) -> List[Share]:
+    """The shares at `xs` of the one k=2 split of `secret` that passes through `known`.
+
+    With k=2 the polynomial is a line, fixed by its value at 0 (the secret) and one share, so a
+    share another split already handed out can be completed rather than drawn again: a split
+    interrupted after one custodian stored its share is finished with that share kept."""
+    x0, y0 = known
+    if not isinstance(x0, int) or isinstance(x0, bool) or not 1 <= x0 <= 255:
+        raise ValueError("share x-coordinates must be integers in 1..255")
+    if len(y0) != len(secret):
+        raise ValueError("the share and the secret differ in length")
+    if any(not isinstance(x, int) or isinstance(x, bool) or not 1 <= x <= 255 for x in xs):
+        raise ValueError("share x-coordinates must be integers in 1..255")
+    slope = [_div(y ^ s, x0) for s, y in zip(secret, y0)]
+    return [(x, bytes(s ^ _mul(a, x) for s, a in zip(secret, slope))) for x in xs]
