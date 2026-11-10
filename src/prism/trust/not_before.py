@@ -92,6 +92,8 @@ class NotBefore:
         self._last_good: Optional[float] = None
         self._state_path = state_path if state_path is not None else _default_state_path()
         self._lock = threading.Lock()
+        #: Held by the one caller that reads the bounds before the first poll has landed.
+        self._first_poll = threading.Lock()
         self._load()
         self._listeners: List[Callable[[Optional[str]], None]] = []
         self._thread: Optional[threading.Thread] = None
@@ -171,6 +173,8 @@ class NotBefore:
             return []
         try:
             claims = self._verify(token)
+            if not isinstance(claims, dict):
+                raise ValueError("no bounds document")
         except Exception:                                        # noqa: BLE001
             log.warning("Origin's sign-in bounds did not verify; ignored")
             return []
@@ -194,8 +198,17 @@ class NotBefore:
             return True
         if not self._origin or _test_mode():
             pass                                  # no Origin: nothing to enforce
-        elif self._last_good is None or time.monotonic() - self._last_good > STALE_SECONDS:
-            return True                           # fail closed until a fresh poll
+        else:
+            if self._last_good is None:
+                # Never polled: the poller starts on first use, so the first token a process sees
+                # after its start was refused while that first poll was still in flight (2026-11-10,
+                # BUG-032: Iris refused every persona's first call after a Chorus restart). Read
+                # the bounds once, now, before deciding; a poll that fails still fails closed.
+                with self._first_poll:
+                    if self._last_good is None:
+                        self.poll_once()
+            if self._last_good is None or time.monotonic() - self._last_good > STALE_SECONDS:
+                return True                       # fail closed until a fresh poll
         sub = str(claims.get("sub") or "")
         with self._lock:
             if self._all is not None and iat < self._all:

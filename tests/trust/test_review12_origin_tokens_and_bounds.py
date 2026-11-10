@@ -107,11 +107,16 @@ def _poller(tmp_path, docs, monkeypatch):
     return nb, urls
 
 
-def test_a_restarted_peer_refuses_every_token_until_its_first_good_poll(tmp_path, monkeypatch):
-    nb, _ = _poller(tmp_path, [{"seq": 3, "iat": time.time(), "entries": []}], monkeypatch)
-    assert nb.refused(_claims())                 # no poll yet: fail closed
-    nb.poll_once()
-    assert not nb.refused(_claims())
+def test_a_restarted_peer_reads_the_bounds_before_its_first_decision(tmp_path, monkeypatch):
+    """2026-11-10, BUG-032: the poller starts on first use, and the first token after a restart
+    was refused while that first poll was in flight (Iris, every first call after a Chorus
+    restart). The first decision reads the bounds itself; one it cannot read still fails closed."""
+    nb, urls = _poller(tmp_path, [{"seq": 3, "iat": time.time(), "entries": []}], monkeypatch)
+    assert not nb.refused(_claims())             # read once, now, then decided
+    assert len(urls) == 1
+    (tmp_path / "dark").mkdir()
+    dark, _ = _poller(tmp_path / "dark", [], monkeypatch)   # Origin does not answer
+    assert dark.refused(_claims())               # still fail closed
 
 
 def test_a_token_with_no_iat_is_refused(tmp_path, monkeypatch):

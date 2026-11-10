@@ -6,6 +6,11 @@ All notable changes to `agience-prism` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-11-10
+
+### Fixed
+- The sign-in bounds poller reads the bounds itself before its first decision (BUG-032). It starts on first use and refused every token until that first poll landed, so the first call a persona took after its process started was refused as "issued before its sign-in bound" (Iris, on every first call after a Chorus restart). A first poll that fails still fails closed; a poll answer that is no bounds document is ignored as unverified.
+
 ## [0.1.10] - 2026-11-09
 
 ### Fixed
