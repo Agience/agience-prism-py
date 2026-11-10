@@ -6,6 +6,11 @@ All notable changes to `agience-prism` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-11-09
+
+### Fixed
+- GitHub CI is green: the `floor` fixture is offered to the trust tests from `tests/trust/conftest.py` instead of being imported into a test module, where ruff read each use as a parameter as a redefinition (F811) and stopped the job before the tests ran.
+
 ## [0.1.9] - 2026-11-08
 
 ### Changed (review 31)

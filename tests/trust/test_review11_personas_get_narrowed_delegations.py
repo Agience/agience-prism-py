@@ -16,9 +16,8 @@ import asyncio
 
 import pytest
 
-from .test_server_auth import (  # noqa: F401 — the oracle's fixtures and helpers
-    CLIENT_ID, ISSUER_URL, _auth, _now, _origin_delegation, _origin_user_token, _run_middleware,
-    floor)
+from .test_server_auth import (  # noqa: F401 — the oracle's helpers; `floor` comes from conftest
+    CLIENT_ID, ISSUER_URL, _auth, _now, _origin_delegation, _origin_user_token, _run_middleware)
 
 NARROW = "iris"
 
